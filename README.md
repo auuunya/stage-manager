@@ -15,7 +15,7 @@
 
 ```text
 stage-manager/               # 核心封装
-├── stage-manager.md         # 规则说明书
+├── SKILL.md                 # 技能规则说明书
 ├── STAGES.md                # 当前阶段的看板
 ├── BACKLOG.md               # 任务溢出池
 ├── scripts/                 # 自动化脚本
