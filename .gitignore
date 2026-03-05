@@ -1,9 +1,10 @@
 # 仓库相关
 STAGES.md
 BACKLOG.md
-!examples/BACKLOG.md
+!templates/BACKLOG.md
 stages/
 archive/
+agents/
 
 # Python 缓存与编译文件
 __pycache__/

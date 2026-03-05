@@ -1,0 +1,4 @@
+interface:
+  display_name: "Stage Manager"
+  short_description: "Manage stage lifecycle, progress sync, and archiving"
+  default_prompt: "Use $stage-manager to initialize a stage and keep STAGES.md synchronized."

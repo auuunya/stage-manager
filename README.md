@@ -6,7 +6,7 @@
 
 ## 🌟 核心特性
 
-- **状态机管理**：严格控制项目的 `Planning` -> `In Progress` -> `Done` 流转。
+- **阶段流程管理**：按阶段推进 `Planning`/`In Progress`/`Done`，并在归档时进行完成度门禁。
 - **自动化归档**：一键将完成的阶段移入 `archive/`，防止项目文档膨胀。
 - **任务溢出处理**：自动捕获未完成任务并同步至 `BACKLOG.md`。
 - **Agent 友好**：预设的指令集（CLI）让 Cursor, Windsurf, AutoGPT 等 AI 工具能无缝接管项目管理。
@@ -16,15 +16,16 @@
 ```text
 stage-manager/               # 核心封装
 ├── SKILL.md                 # 技能规则说明书
-├── STAGES.md                # 当前阶段的看板
-├── BACKLOG.md               # 任务溢出池
 ├── scripts/                 # 自动化脚本
 │   └── stage_manager.py     # 核心管理器
 ├── references/              # 规范定义
 │   ├── stage_template.md    # 阶段文档模板
 │   └── best_practice.md     # 任务拆解准则
-└── examples/                # 示例
+├── assets/                  # 静态资源
+└── templates/               # 示例
     ├── BACKLOG.md
     ├── stage-01-foundation.md
     └── stage-02-auth-system.md
 ```
+
+> 运行脚本后生成的 `STAGES.md`、`BACKLOG.md`、`stages/`、`archive/stages/` 位于目标项目根目录，而非 skill 目录。
