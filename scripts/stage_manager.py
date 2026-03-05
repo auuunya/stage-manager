@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Stage-Manager: 项目生命周期管理脚本 (开源解耦版)
+Stage-Manager: 项目生命周期管理脚本
 功能：自动化处理阶段初始化、状态精准同步、进度统计及归档。
 """
 import os
@@ -79,7 +79,7 @@ def init_stage(name):
     active_file, max_num = get_latest_stage_info()
 
     if active_file:
-        print(f"❌ 错误：阶段 '{active_file}' 尚未完成，请先执行 done。")
+        print(f"错误：阶段 '{active_file}' 尚未完成，请先执行 done。")
         return
 
     next_num = f"{int(max_num) + 1:02d}"
@@ -133,7 +133,7 @@ def sync_log(message):
     """向活跃阶段追加进度日志"""
     active_file, _ = get_latest_stage_info()
     if not active_file:
-        print("❌ 错误：没有活跃阶段可以同步日志。")
+        print("错误：没有活跃阶段可以同步日志。")
         return
 
     filepath = os.path.join(STAGES_EXEC_DIR, active_file)
@@ -148,7 +148,7 @@ def archive_stage():
     """归档阶段，精准更新看板状态并迁移 Backlog"""
     active_file, _ = get_latest_stage_info()
     if not active_file:
-        print("❓ 没有活跃阶段需要归档。")
+        print("没有活跃阶段需要归档。")
         return
 
     src = os.path.join(STAGES_EXEC_DIR, active_file)
@@ -161,7 +161,7 @@ def archive_stage():
     if unfinished:
         with open(BACKLOG_FILE, 'a', encoding='utf-8') as f:
             f.write(f"\n### 来自 {active_file} 的溢出任务 ({datetime.now().strftime('%Y-%m-%d')})\n" + "\n".join(unfinished) + "\n")
-        print(f"📋 发现未完成任务，已迁移至 BACKLOG.md")
+        print(f"发现未完成任务，已迁移至 BACKLOG.md")
 
     # 2. 物理归档
     shutil.move(src, dst)
@@ -177,7 +177,7 @@ def archive_stage():
                 line = line.replace("（当前阶段）", "（已归档）")
             f.write(line)
 
-    print(f"📦 阶段 {active_file} 已成功归档至 archive/stages/。")
+    print(f"阶段 {active_file} 已成功归档至 archive/stages/。")
 
 def main():
     if len(sys.argv) < 2:
@@ -197,8 +197,8 @@ def main():
         if active:
             progress = calculate_progress(os.path.join(STAGES_EXEC_DIR, active))
             bar = "█" * (progress // 5) + "░" * (20 - (progress // 5))
-            print(f"🔥 当前阶段: {active}")
-            print(f"📊 进度: [{bar}] {progress}%")
+            print(f"当前阶段: {active}")
+            print(f"进度: [{bar}] {progress}%")
         else:
             print("当前项目没有活跃阶段。")
 
