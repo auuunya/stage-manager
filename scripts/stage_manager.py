@@ -264,22 +264,56 @@ def sync_log(message):
     update_heartbeat(); return True
 
 def get_project_stats():
-    """获取统计指标。"""
+    """获取统计指标（阶段与任务分开统计）。"""
     ensure_structure()
-    done_c = len([f for f in os.listdir(ARCHIVE_EXEC_DIR) if f.endswith(".md")]) if os.path.exists(ARCHIVE_EXEC_DIR) else 0
-    active_c = len([f for f in os.listdir(STAGES_EXEC_DIR) if f.endswith(".md")]) if os.path.exists(STAGES_EXEC_DIR) else 0
-    backlog_c = sum(1 for l in open(BACKLOG_FILE, 'r', encoding='utf-8').readlines() if l.strip().startswith("- [ ]")) if os.path.exists(BACKLOG_FILE) else 0
+    done_stages = len([f for f in os.listdir(ARCHIVE_EXEC_DIR) if f.endswith(".md")]) if os.path.exists(ARCHIVE_EXEC_DIR) else 0
+    active_stages = len([f for f in os.listdir(STAGES_EXEC_DIR) if f.endswith(".md")]) if os.path.exists(STAGES_EXEC_DIR) else 0
+    
+    total_done_tasks = 0
+    total_pending_tasks = sum(1 for l in open(BACKLOG_FILE, 'r', encoding='utf-8').readlines() if l.strip().startswith("- [ ]")) if os.path.exists(BACKLOG_FILE) else 0
+    
+    active_file, _ = get_latest_stage_info()
+    if active_file:
+        filepath = os.path.join(STAGES_EXEC_DIR, active_file)
+        with open(filepath, 'r', encoding='utf-8') as f: content = f.read()
+        # 统计 4 (任务) 和 5 (验收) 章节的任务
+        sections = re.findall(r'## [45]\..*?(?=##|$)', content, re.S)
+        for s in sections:
+            total_done_tasks += len(re.findall(r'- \[(x|X)\]', s))
+            total_pending_tasks += len(re.findall(r'- \[ \]', s))
+    
     adr_c = count_adrs_from_index()
-    return f"已完成: {done_c} | 活跃: {active_c} | 待办: {backlog_c} | 决策: {adr_c}"
+    return f"阶段(归档/活跃): {done_stages}/{active_stages} | 任务(完成/待办): {total_done_tasks}/{total_pending_tasks} | 决策: {adr_c}"
+
+def get_pending_tasks(filepath):
+    """从阶段文档中提取未完成任务并按优先级排序。"""
+    if not os.path.exists(filepath): return []
+    with open(filepath, 'r', encoding='utf-8') as f: content = f.read()
+    breakdown_match = re.search(r'## 4\..*?(?=##|$)', content, re.S)
+    if not breakdown_match: return []
+    tasks = re.findall(r'- \[ \] (.*)', breakdown_match.group())
+    def p_score(t):
+        if "[P0]" in t: return 0
+        if "[P1]" in t: return 1
+        if "[P2]" in t: return 2
+        return 3
+    return sorted(tasks, key=p_score)
 
 def show_status():
     """展示看板。"""
     active, _ = get_latest_stage_info()
     print("\n" + "="*50 + f"\n [项目健康度] {get_project_stats()}\n" + "="*50)
     if active:
-        p = calculate_progress(os.path.join(STAGES_EXEC_DIR, active))
+        filepath = os.path.join(STAGES_EXEC_DIR, active)
+        p = calculate_progress(filepath)
         bar = "#" * int(p/5) + "-" * (20 - int(p/5))
         print(f" [活跃阶段] {active}\n [完成进度] [{bar}] {p}%")
+        
+        pending = get_pending_tasks(filepath)
+        if pending:
+            print("\n [未完成任务] (前5条):")
+            for t in pending[:5]: print(f"  [ ] {t.strip()}")
+            
     if os.path.exists(ADR_INDEX):
         print("\n [最近决策] (最近3条):")
         with open(ADR_INDEX, 'r', encoding='utf-8') as f:

@@ -8,7 +8,7 @@ note: 本文件定义当前会话的强制执行标准。优先级高于 SKILL.m
 
 ## 1. 语言与质量协议
 
-- **思考链与输出**: 全场景强制使用 **[中文]**。
+- **思考链与输出**: 全场景强制使用 **[Language]**。
 - **ASCII 强制令**: 严禁 Emoji。必须使用 `[OK]`, `[!]`, `[-]`, `[x]`, `[ ]` 等符号或者 `ascii` 码。
 - **Git 血缘追踪**: 凡是涉及架构决策的代码提交，Commit Message **必须包含** 对应的 `[ADRS-XXX]` 唯一编号。
 
@@ -25,8 +25,14 @@ note: 本文件定义当前会话的强制执行标准。优先级高于 SKILL.m
 
 ## 4. 约束与禁止行为
 
-- **技能代码保护 [CRITICAL]**: Agent 严禁擅自修改 `.codex/skills/stage-manager/scripts/` 目录下的任何脚本代码。Agent 必须定位为脚本的 **[使用者/执行者]**，而非开发维护者。只有在用户明确下达“优化/修改 stage-manager 技能本身”的指令时，方可变动脚本。
+- **技能代码保护**: Agent 严禁擅自修改 `.codex/skills/stage-manager/scripts/` 目录下的任何脚本代码。Agent 必须定位为脚本的 **[使用者/执行者]**，而非开发维护者。只有在用户明确下达"优化/修改 stage-manager 技能本身"的指令时，方可变动脚本。
 - **Bootstrap Alignment**: 开启会话首动作必须是 `stage:bootstrap`，并简要复述记忆锚点以确认记忆对齐。
 - **需求填充**: 在 `init` 之后必须根据需求填充“目标/范围/任务拆解/验收标准/风险”。
 - **资产归口**: 严禁在 `.stages/` 目录以外创建管理文件。
 - **精准指代**: 严禁在 `sync` 中使用“优化了代码”等模糊词汇，必须指明具体模块或 [ADRS-XXX] ID。
+
+## 5. 资产保护协议
+
+- **禁止手动覆盖**: 严禁 Agent 使用 `write_file` 直接修改 `.stages/STAGES.md`, `BACKLOGS.md`, `ADRS.md` 或 `STAGE_SESSIONS.md`。
+- **强制脚本调用**: 所有的元数据更新（进度同步、决策记录、会话摘要、任务认领）**必须且只能**通过调用 `python3 <skill-path>/scripts/stage_manager.py` 下照对应子命令（`sync`, `summary`, `intake`, `done`）来完成。
+- **原子化更新**: 脚本会自动处理“追加”逻辑，Agent 不得尝试手动合并历史记录。
