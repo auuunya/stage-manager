@@ -1,69 +1,42 @@
 ---
 name: stage-manager
-description: 项目阶段管理与归档。用于 stage:init、stage:sync、stage:status、stage:done、stage:done --force，以及创建维护 STAGES.md、BACKLOG.md、stages/、archive/stages/。凡是阶段拆解、进度同步、完成度检查、归档、未完成任务迁移都应触发本技能。
+description: 项目阶段管理与归档技术规格书。定义资产归口结构（.stages/）、核心指令集、及参考规范（references/）。触发词：计划、阶段拆解、进度同步、完成度检查、归档、未完成任务迁移。
 ---
 
 ## 1. 核心交互指令
 
-| 指令                  | CLI                                                               | 用途                   |
-| --------------------- | ----------------------------------------------------------------- | ---------------------- |
-| `stage:init <name>`   | `python3 <skill-path>/scripts/stage_manager.py init <name>`       | 创建阶段文档并更新索引 |
-| `stage:sync "<msg>"`  | `python3 <skill-path>/scripts/stage_manager.py sync "<msg>"`      | 记录进展并刷新最近同步 |
-| `stage:status`        | `python3 <skill-path>/scripts/stage_manager.py status`            | 查看活跃阶段与完成度   |
-| `stage:done`          | `python3 <skill-path>/scripts/stage_manager.py done`              | 完成度 100% 时归档     |
-| `stage:done --force`  | `python3 <skill-path>/scripts/stage_manager.py done --force`      | 未达 100% 强制归档     |
-| `stage:status --root` | `python3 <skill-path>/scripts/stage_manager.py status --root <p>` | 指定项目根目录         |
+| 指令                 | CLI                                                           | 技术用途                          |
+| :------------------- | :------------------------------------------------------------ | :-------------------------------- |
+| `stage:bootstrap`    | `python3 <skill-path>/scripts/stage_manager.py bootstrap`     | **[LOAD]** 加载会话快照与依赖感知 |
+| `stage:summary`      | `python3 <skill-path>/scripts/stage_manager.py summary "<t>"` | **[SAVE]** 压缩并保存当前会话快照 |
+| `stage:intake "<k>"` | `python3 <skill-path>/scripts/stage_manager.py intake "<k>"`  | **[INTAKE]** 从 Backlog 认领任务  |
+| `stage:init`         | `python3 <skill-path>/scripts/stage_manager.py init <name>`   | 初始化资产骨架并填充开启新阶段    |
+| `stage:sync`         | `python3 <skill-path>/scripts/stage_manager.py sync "<msg>"`  | 增量日志记录；[ADR] 触发索引同步  |
+| `stage:status`       | `python3 <skill-path>/scripts/stage_manager.py status`        | 查看看板、进度及最近详情下钻      |
+| `stage:done`         | `python3 <skill-path>/scripts/stage_manager.py done`          | 闭环归档 (含 DoD 硬门禁检查)      |
 
-## 2. 运行环境与规则
+## 2. 工程化核心机制
 
-1. `STAGES.md` 仅作索引；规则以本文件为准。
-2. 阶段详情写入项目根目录 `stages/stage-XX-<name>.md`。
-3. 技术决策变更后执行 `stage:sync`，并更新 `## 8. 关键决策`。
-4. 会话开始先执行 `stage:status`；进度 100% 时提示 `stage:done`。
-5. 阶段文档必须遵循 [references/stage_template.md](references/stage_template.md)。
-6. 输出质量遵循 [references/best_practice.md](references/best_practice.md)。
-7. 所有产物默认生成于项目根目录，不写入 skill 目录。
+### 2.1 DoD (Definition of Done) 验收硬门禁
 
-## 3. 阶段管理工作流
+- **逻辑**：在归档时自动扫描 `## 5. 验收标准` 章节。
+- **红线**：若存在任何未完成项，归档将被拒绝，确保功能实现与质量验收不脱节。
 
-### 3.1 查询与定位
+### 2.2 Backlog 认领机制 (stage:intake)
 
-- 执行前读取项目根目录 `STAGES.md`，定位 `（当前阶段）`。
-- 读取对应 `stages/stage-XX-<name>.md` 获取上下文。
+- **逻辑**：支持从 `BACKLOGS.md` 中按关键字认领任务并自动注入当前活跃阶段。
 
-### 3.2 自动化流转
+## 3. 核心参考规范 (References)
 
-- **初始化**：若无活跃阶段且用户提出新需求，引导执行 `stage:init`。
-- **更新**：代码运行成功或文档更新后，自动调用 `stage:sync`。
-- **闭环**：验收项完成后执行 `stage:done`；仅在用户明确要求下使用 `stage:done --force`。
+Agent 执行过程中必须严格参考以下文件以确保输出一致性：
 
-## 4. 规范约束
+- `references/stage_template.md`: **[强制]** 阶段文档的标准 Schema 结构。
+- `references/best_practice.md`: **[强制]** 任务拆解（INVEST）、验收标准编写及日志规范。
 
-- **命名规范**：文件必须符合 `stage-XX-<short-name>.md`（全小写，连字符）。
-- **内容质量**：任务拆解遵循 **INVEST 原则**（见 `references/best_practice.md`）。
-- **禁止蔓延**：非本阶段范围（Out of Scope）的任务必须记录在案，严禁在当前阶段偷跑。
-- **归档策略**：执行 `done` 时，未完成任务迁移至 `BACKLOG.md`，原始文件移至 `archive/stages/`。
-- **逻辑触发点**：
-  1. 任何代码修改完成后，必须立即检查当前活跃阶段文档并同步。
-  2. 严禁手动修改 `STAGES.md` 的列表结构，必须由脚本生成。
-  3. `init/sync/done` 执行后，必须刷新 `STAGES.md` 中的“最近同步”时间。
+## 4. 标准阶段生命周期
 
-## 5. 自动化工具接入
-
-_以下命令可由 Agent 或用户执行。_
-
-```bash
-python3 <skill-path>/scripts/stage_manager.py init "feature-auth"
-python3 <skill-path>/scripts/stage_manager.py sync "feat: Login API finished"
-python3 <skill-path>/scripts/stage_manager.py done --force
-```
-
-## 6. 归档与清理策略
-
-归档与清理规则已在第 4 节“归档策略/逻辑触发点”定义，执行 `stage:done` 时按其自动迁移并同步索引。
-
-## 7. 禁止行为
-
-- **严禁**直接编辑 `STAGES.md` 中的列表项（由脚本维护）。
-- **严禁**在没有活跃阶段的情况下开始大规模代码重构。
-- **严禁**绕过脚本逻辑手动在 `stages/` 目录下创建文件。
+1. **探测**: 会话开启必执行 `bootstrap` 并对齐 `best_practice.md`。
+2. **认领**: 若存在遗留任务，执行 `intake` 进行捞取。
+3. **执行**: 定位活跃阶段开展工作，任务拆解必须符合 **INVEST** 原则。
+4. **同步**: 变更代码后执行 `sync`；架构变更触发 ADRS 同步。
+5. **闭环**: 验收标准全量通过后执行 `done`。

@@ -1,31 +1,27 @@
 # Stage-Manager
 
-> 一个为 AI Agent 工作流设计的自动化阶段计划管理系统。
+> 为 AI Agent 工作流设计的工业级自动化阶段计划管理系统。
 
-`stage-manager` 是一套轻量级、标准化的项目生命周期管理 Skill。它通过“一阶段一文档”的隔离原则，结合自动化脚本，确保项目进度、决策记录（ADR）和任务溢出（Backlog）被结构化地记录，同时保持根目录的清爽。
+`stage-manager` 是一套轻量级、标准化的项目生命周期管理 Skill。它通过“一阶段一文档”的隔离原则，结合自动化脚本，确保项目进度、架构决策记录（ADRS）和会话摘要（STAGE_SESSIONS）被结构化地记录。所有资产统一归口于 `.stages/` 目录，保持根目录极致清爽。
 
-## 🌟 核心特性
+## 核心特性
 
-- **阶段流程管理**：按阶段推进 `Planning`/`In Progress`/`Done`，并在归档时进行完成度门禁。
-- **自动化归档**：一键将完成的阶段移入 `archive/`，防止项目文档膨胀。
-- **任务溢出处理**：自动捕获未完成任务并同步至 `BACKLOG.md`。
-- **Agent 友好**：预设的指令集（CLI）让 Cursor, Windsurf, AutoGPT 等 AI 工具能无缝接管项目管理。
+- **中央资产归口**: 所有管理文件（看板、决策、日志、任务池）统一存放在 `.stages/` 目录下。
+- **深度中文化支持**: 系统原生支持中文术语、看板及日志，提供极致的母语级协作体验。
+- **架构决策 ID 化**: 自动为架构决策生成唯一 ID (如 `[ADRS-001]`)，支持跨文档精准引用。
+- **会话状态压缩 (Save/Load)**: 通过 `summary` 和 `bootstrap` 机制，解决长对话下的记忆丢失与上下文膨胀问题。
+- **任务智能路由**: 归档时自动识别任务标签（FIX/FEAT），分流至技术债务或路线图。
 
-## 📁 目录结构
+## 目录结构
 
 ```text
-stage-manager/               # 核心封装
-├── SKILL.md                 # 技能规则说明书
-├── scripts/                 # 自动化脚本
-│   └── stage_manager.py     # 核心管理器
-├── references/              # 规范定义
-│   ├── stage_template.md    # 阶段文档模板
-│   └── best_practice.md     # 任务拆解准则
-├── assets/                  # 静态资源
-└── templates/               # 示例
-    ├── BACKLOG.md
-    ├── stage-01-foundation.md
-    └── stage-02-auth-system.md
+.stages/                     # 自动生成的资产归口 (位于项目根目录)
+├── STAGES.md                # 阶段看板 (含统计与最新快照)
+├── ADRS.md                  # 架构决策中央索引 (含标准 ID)
+├── STAGE_SESSIONS.md        # 会话压缩日志 (滑动窗口来源)
+├── BACKLOGS.md              # 跨阶段任务溢出池
+├── stages/                  # 当前活跃阶段文档 (如 stage-01-xxx.md)
+└── archive/                 # 已完成的闭环阶段归档
 ```
 
-> 运行脚本后生成的 `STAGES.md`、`BACKLOG.md`、`stages/`、`archive/stages/` 位于目标项目根目录，而非 skill 目录。
+> 本技能的所有产物均生成于 `.stages/`，不会污染你的项目源码。
