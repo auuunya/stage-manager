@@ -3,10 +3,11 @@ STAGES.md
 BACKLOGS.md
 ADRS.md
 STAGE_SESSIONS.md
-!templates/BACKLOGS.md
-stages/
+.stages/
 archive/
 agents/
+
+!templates/BACKLOGS.md
 
 # Python 缓存与编译文件
 __pycache__/

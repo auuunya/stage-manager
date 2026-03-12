@@ -1,54 +1,76 @@
-# Stage-XXX: <阶段简短名称>
+---
+stage_id: "STAGE-XXX"
+name: "TBD"
+status: "PLANNING"
+start_date: null
+end_date: null
+depends_on: [] # stage 级依赖，仅填写 stage_id
+milestone: null # milestone 标识符；无则为 null
+---
 
-> 元数据
->
-> - 开始日期: YYYY-MM-DD
-> - 结束日期: (待定)
-> - 阶段状态: [PLANNING] | [IN_PROGRESS] | [DONE] | [ARCHIVED]
-> - 前置依赖: (无)
-> - 关联里程碑: [M1-XXX]
+# STAGE-XXX: TBD
 
 ---
 
+<!-- @section:goals -->
+
 ## 1. 阶段目标
 
-- [ ] 目标 A: ...
+- [ ] 目标 A: TBD
+- [ ] 目标 B: TBD
+
+<!-- @section:scope -->
 
 ## 2. 范围
 
-- 功能点 1
+- 功能点/组件 1: TBD
+
+<!-- @section:out_of_scope -->
 
 ## 3. 非范围
 
-- 暂不处理: ...
+- 暂不处理: TBD
+
+<!-- @section:tasks -->
 
 ## 4. 任务拆解
 
-- [ ] [P0] 任务名称 | 负责人/Agent/Sub Agent | Skills | 截止日期
+- [ ] [P0] [TASK-ID] 任务名称 | owner=unassigned | executor=agent | skills=[] | task_depends_on=[] | due=YYYY-MM-DD
+
+<!-- @section:dod -->
 
 ## 5. 验收标准
 
-1. [ ] 所有 P0 任务通过验证。
+1. [ ] **功能性**: 所有 P0 任务完成，关键路径已验证。
+2. [ ] **安全性**: 已完成权限/隔离校验，无越权问题。
+3. [ ] **稳定性**: 核心指标达到本阶段目标。
+4. [ ] **变更可追踪**: 日志、ADR、总结已同步更新。
+
+<!-- @section:risks -->
 
 ## 6. 风险与应对
 
-| 风险描述 | 严重程度 | 应对措施 |
-| :------- | :------- | :------- |
-| 示例风险 | 中       | 示例措施 |
+| 风险描述 | 严重程度 | 触发信号 | 应对措施 | 回滚/降级方案 |
+| :------- | :------- | :------- | :------- | :------------ |
+
+<!-- @section:log -->
 
 ## 7. 进度日志
 
-### [YYYY-MM-DD] 标题
+> 进度日志记录时间序列增量，不重复抄写任务列表。
 
-- **进展**: ...
+- 暂无
 
-## 8. 关键决策 (ADRS)
+<!-- @section:adrs -->
 
-- **决策点**:
-- **背景/动机**:
-- **结论**:
+## 8. 关键决策（ADRs）
+
+- 暂无
+
+<!-- @section:summary -->
 
 ## 9. 阶段总结
 
-- **核心成果**:
-- **遗留风险**:
+> 阶段总结只在阶段收尾或里程碑变化时更新。
+
+- 暂无

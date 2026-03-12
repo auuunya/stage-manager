@@ -4,35 +4,79 @@ enforcement: mandatory
 note: 本文件定义当前会话的强制执行标准。优先级高于 SKILL.md。
 ---
 
-> **Language: [中文]**
+> Language: 中文
 
 ## 1. 语言与质量协议
 
-- **思考链与输出**: 全场景强制使用 **[Language]**。
-- **ASCII 强制令**: 严禁 Emoji。必须使用 `[OK]`, `[!]`, `[-]`, `[x]`, `[ ]` 等符号或者 `ascii` 码。
-- **Git 血缘追踪**: 凡是涉及架构决策的代码提交，Commit Message **必须包含** 对应的 `[ADRS-XXX]` 唯一编号。
+- 全场景输出强制使用中文。
+- 严禁 Emoji。
+- 输出中的状态与标记优先使用 ASCII 风格符号，如 `[OK]`, `[!]`, `[-]`, `[x]`, `[ ]`。
+- 凡是涉及架构决策的代码提交，Commit Message 必须包含对应的 `[ADRS-XXX]` 唯一编号。
 
 ## 2. 规范校验义务 (Compliance)
 
-- **Reference 对齐**: Agent 在拆解任务（`init`）或编写日志（`sync`）时，**必须先通过 `read_file` 读取 [references/best_practice.md](references/best_practice.md)**，确保输出符合其中的标准。
-- **模板去噪**: 所有新阶段文档必须通过读取 [references/stage_template.md](references/stage_template.md) 进行初始化。Agent 严禁在最终文档中保留任何斜体引导语或模板占位引用块。
+- 在执行 `init`、`sync`、`summary --stage` 或人工补全文档前，必须先读取 `references/best_practice.md`。
+- 所有新阶段文档必须先基于 `references/stage_template.md` 初始化；若使用脚本初始化，则以脚本生成结果作为最终起点。
+- 所有阶段文档输出必须与 `references/stage_example.md` 的字段写法、结构粒度和条目组织方式保持一致。
+- Agent 严禁在最终文档中保留模板占位引用块、说明性噪音或无意义示例文本。
+- 未知信息必须保留为 `TBD`、`null` 或空数组，不得臆造。
 
 ## 3. 工程化补丁 (Engineering Patches)
 
-- **DoD 硬门禁**: 执行 `stage:done` 前，Agent 必须核对 `## 5. 验收标准`。若存在未勾选项，**严禁**直接归档。
-- **归档决策**: 进度不满 100% 或 DoD 未通过时，Agent 必须先列出 `[Pending Tasks]` 并询问用户授权，严禁擅自使用 `--force`。
-- **Proactive ADR**: `sync [ADR]` 后必须立即补全决策背景，严禁留空。
+- 执行 `stage:done` 前，必须核对 `## 5. 验收标准`。若存在未勾选项，严禁直接归档。
+- 当进度未达到 100% 或 DoD 未通过时，必须先列出 `[Pending Tasks]` 并请求用户授权；严禁擅自使用 `--force`。
+- `sync [ADR]` 仅用于生成 ADR 索引与存根；生成后，Agent 必须继续补全：
+  - 背景/动机
+  - 可选方案
+  - 结论
+  - 影响/后果
+- 日志必须指向具体模块、接口、脚本、风险项或 `[ADRS-XXX]`，严禁使用"优化了代码""做了一些调整"等模糊表述。
+- 当 section 当前为 `- 暂无` 且需要新增首条记录时，必须替换该占位，不得保留并列脏数据。
 
-## 4. 约束与禁止行为
+## 4. 工作流约束
 
-- **技能代码保护**: Agent 严禁擅自修改 `.codex/skills/stage-manager/scripts/` 目录下的任何脚本代码。Agent 必须定位为脚本的 **[使用者/执行者]**，而非开发维护者。只有在用户明确下达"优化/修改 stage-manager 技能本身"的指令时，方可变动脚本。
-- **Bootstrap Alignment**: 开启会话首动作必须是 `stage:bootstrap`，并简要复述记忆锚点以确认记忆对齐。
-- **需求填充**: 在 `init` 之后必须根据需求填充“目标/范围/任务拆解/验收标准/风险”。
-- **资产归口**: 严禁在 `.stages/` 目录以外创建管理文件。
-- **精准指代**: 严禁在 `sync` 中使用“优化了代码”等模糊词汇，必须指明具体模块或 [ADRS-XXX] ID。
+- 当 Agent 开始执行项目阶段管理工作时，首个操作必须是 `stage:bootstrap`。
+- `init` 完成后，必须根据当前需求继续填充：
+  - `## 1. 阶段目标`
+  - `## 2. 范围`
+  - `## 4. 任务拆解`
+  - `## 5. 验收标准`
+  - `## 6. 风险与应对`
+- 若用户需求不足以完整填充，未知字段必须保留 `TBD/null`，不得编造。
+- 更新已有阶段文档时，只允许增量修改受影响的 section，不得整体重写未变更内容。
+- 当需要操作非当前活跃阶段时，优先使用脚本的 `--file` 参数，而不是手动猜测目标文件。
 
-## 5. 资产保护协议
+## 5. 技能代码保护
 
-- **禁止手动覆盖**: 严禁 Agent 使用 `write_file` 直接修改 `.stages/STAGES.md`, `BACKLOGS.md`, `ADRS.md` 或 `STAGE_SESSIONS.md`。
-- **强制脚本调用**: 所有的元数据更新（进度同步、决策记录、会话摘要、任务认领）**必须且只能**通过调用 `python3 <skill-path>/scripts/stage_manager.py` 下照对应子命令（`sync`, `summary`, `intake`, `done`）来完成。
-- **原子化更新**: 脚本会自动处理“追加”逻辑，Agent 不得尝试手动合并历史记录。
+- 严禁擅自修改当前 Skill 目录下 `scripts/` 中的任何脚本代码。
+- Agent 必须定位为脚本的使用者/执行者，而非默认维护者。
+- 只有在用户明确下达"优化/修改 stage-manager 技能本身"之类指令时，方可修改脚本、模板或参考文档。
+
+## 6. 资产保护协议
+
+- 严禁使用直接覆写方式手动修改以下索引资产：
+  - `.stages/STAGES.md`
+  - `.stages/BACKLOGS.md`
+  - `.stages/ADRS.md`
+  - `.stages/STAGE_SESSIONS.md`
+- 所有元数据更新必须且只能通过调用 `python3 <skill-path>/scripts/stage_manager.py` 的对应子命令完成，例如：
+- `sync`
+- `summary`
+- `intake`
+- `done`
+
+校验动作使用：
+
+- `validate`
+
+- 脚本负责处理追加、编号与索引更新逻辑；Agent 不得手动合并历史记录或重排已有索引。
+
+## 7. 阶段归档前置检查
+
+执行 `stage:done` 前，Agent 必须显式确认以下条件：
+
+1. [ ] 所有 `[P0]` 任务已完成。
+2. [ ] `## 5. 验收标准` 已全部勾选。
+3. [ ] `## 3. 非范围` 中的新想法已迁移到 `BACKLOGS.md` 或后续阶段。
+4. [ ] 已执行 `stage:summary` 保存最后会话快照，或已确认当前上下文无需额外快照。
+5. [ ] `## 9. 阶段总结` 已填写完成，或允许脚本补写最小归档总结。
