@@ -16,20 +16,20 @@ milestone: null # milestone 标识符；无则为 null
 
 ## 1. 阶段目标
 
-- [ ] 目标 A: TBD
-- [ ] 目标 B: TBD
+- [ ] [TARGET-ID]: TBD
+- [ ] [TARGET-ID]: TBD
 
 <!-- @section:scope -->
 
 ## 2. 范围
 
-- 功能点/组件 1: TBD
+- [SCOPE-ID] 功能点/组件 1: TBD
 
 <!-- @section:out_of_scope -->
 
 ## 3. 非范围
 
-- 暂不处理: TBD
+- [OUT-SCOPE-ID] 暂不处理: TBD
 
 <!-- @section:tasks -->
 

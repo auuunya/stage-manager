@@ -16,23 +16,23 @@ milestone: "MVP-AUTH"
 
 ## 1. 阶段目标
 
-- [x] 目标 A: 完成基础用户登录流程
-- [ ] 目标 B: 实现 Token 刷新机制
+- [x] [TARGET-1]: 完成基础用户登录流程
+- [ ] [TARGET-2]: 实现 Token 刷新机制
 
 <!-- @section:scope -->
 
 ## 2. 范围
 
-- 登录 API
-- Token 签发
-- Token 校验中间件
+- [SCOPE-1] 登录 API
+- [SCOPE-2] Token 签发
+- [SCOPE-3] Token 校验中间件
 
 <!-- @section:out_of_scope -->
 
 ## 3. 非范围
 
-- OAuth 第三方登录
-- 多因素认证
+- [OUT-SCOPE-1] OAuth 第三方登录
+- [OUT-SCOPE-2] 多因素认证
 
 <!-- @section:tasks -->
 
