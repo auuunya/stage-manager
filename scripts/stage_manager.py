@@ -459,19 +459,25 @@ def prepend_to_section_body(content: str, section_no: int, block_text: str, remo
 # -------------------------------------------------------------------
 
 def get_latest_stage_info():
-    """
-    读取 STAGES.md 获取当前阶段与最大编号。
-    Returns:
-        Tuple[Optional[str], str]: (当前阶段文件名, 最大编号三位字符串)。
-    """
-    ensure_structure()
-    if not os.path.exists(cfg.stages_index):
-        return None, "000"
+  """
+  从 STAGES.md 中定位唯一当前阶段。
+  返回 (active_filename_or_none, max_stage_num_str)
+  """
+  ensure_structure()
 
-    content = read_text(cfg.stages_index)
-    active_match = re.search(r"`\.stages/stages/(stage-(\d+)-.*?\.md)`（当前阶段）", content)
-    all_nums = [int(n) for n in re.findall(r"stage-(\d+)-", content)]
-    return (active_match.group(1) if active_match else None), f"{max(all_nums) if all_nums else 0:03d}"
+  active_files = []
+  if os.path.exists(cfg.stages_exec_dir):
+      active_files = [f for f in os.listdir(cfg.stages_exec_dir) if f.endswith(".md")]
+
+  max_num = f"{max((_extract_stage_num(f) for f in active_files), default=0):03d}"
+
+  if not os.path.exists(cfg.stages_index):
+      return None, max_num
+
+  content = read_text(cfg.stages_index)
+  active_match = re.search(r"`\.stages/stages/(stage-\d+-.*?\.md)`（当前阶段）", content)
+
+  return (active_match.group(1) if active_match else None), max_num
 
 
 def resolve_stage_file(target: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
@@ -505,6 +511,104 @@ def resolve_stage_file(target: Optional[str] = None) -> Tuple[Optional[str], Opt
 # -------------------------------------------------------------------
 # 统计
 # -------------------------------------------------------------------
+def list_active_stage_files() -> List[str]:
+    """列出所有活跃阶段文件名，按阶段编号排序。"""
+    if not os.path.exists(cfg.stages_exec_dir):
+        return []
+    files = [f for f in os.listdir(cfg.stages_exec_dir) if f.endswith(".md")]
+    return sorted(files, key=_extract_stage_num)
+
+def _extract_stage_num(filename: str) -> int:
+    """从文件名中提取阶段编号，若无匹配返回最大值 999999。"""
+    m = re.search(r"stage-(\d+)-", filename)
+    return int(m.group(1)) if m else 999999
+
+def rewrite_stages_index(current_stage: Optional[str] = None):
+    """
+    重建 STAGES.md 的阶段清单，保证：
+    - archive/stages 下的文件标记为 （已归档）
+    - stages 下的文件若为 current_stage，则标记为 （当前阶段）
+    - stages 下的其余文件标记为 （活跃阶段）
+    - 任意时刻只允许一个 （当前阶段）
+    """
+    ensure_structure()
+
+    # 读取现有文件，保留“快速状态”区域
+    existing = read_text(cfg.stages_index) if os.path.exists(cfg.stages_index) else ""
+    quick_status_match = re.search(
+        r"(^---\n\n## 快速状态.*$)",
+        existing,
+        re.M | re.S,
+    )
+
+    quick_status_block = quick_status_match.group(1) if quick_status_match else (
+        "---\n\n"
+        "## 快速状态\n"
+        "- [HEARTBEAT] Init\n"
+        "- [LAST_SESSION] 暂无记录\n"
+        f"- 最近同步: {now_datetime()} | 用户: {get_sys_user()} | Version: {get_git_info()}\n"
+    )
+
+    active_files = []
+    archived_files = []
+
+    if os.path.exists(cfg.stages_exec_dir):
+        active_files = [
+            f for f in os.listdir(cfg.stages_exec_dir)
+            if f.endswith(".md")
+        ]
+
+    if os.path.exists(cfg.archive_exec_dir):
+        archived_files = [
+            f for f in os.listdir(cfg.archive_exec_dir)
+            if f.endswith(".md")
+        ]
+
+    active_files = sorted(active_files, key=_extract_stage_num)
+    archived_files = sorted(archived_files, key=_extract_stage_num)
+
+    # 若未显式传 current_stage，则尝试沿用旧索引中的当前阶段
+    if not current_stage:
+        old_current_match = re.search(
+            r"`\.stages/stages/(stage-\d+-.*?\.md)`（当前阶段）",
+            existing,
+        )
+        if old_current_match and old_current_match.group(1) in active_files:
+            current_stage = old_current_match.group(1)
+
+    # 如果仍为空，但存在未归档阶段，则默认第一个阶段为当前阶段
+    if not current_stage and active_files:
+        current_stage = active_files[0]
+
+    lines = []
+    lines.append("# Stages Index\n\n")
+    lines.append("> 此文件由 stage-manager 自动维护。所有资产位于 .stages/ 目录下。\n\n")
+    lines.append("---\n\n")
+    lines.append("## 阶段清单\n")
+
+    index = 1
+
+    # 未归档阶段：当前阶段排前，其余活跃阶段随后
+    if active_files:
+        ordered_active = []
+        if current_stage and current_stage in active_files:
+            ordered_active.append(current_stage)
+        ordered_active.extend([f for f in active_files if f != current_stage])
+
+        for f in ordered_active:
+            status = "当前阶段" if f == current_stage else "活跃阶段"
+            lines.append(f"{index}. `.stages/stages/{f}`（{status}）\n")
+            index += 1
+
+    # 已归档阶段
+    for f in archived_files:
+        lines.append(f"{index}. `.stages/archive/stages/{f}`（已归档）\n")
+        index += 1
+
+    lines.append("\n")
+    lines.append(quick_status_block.strip("\n") + "\n")
+
+    write_text(cfg.stages_index, "".join(lines))
 
 def count_adrs_from_index():
     """
@@ -1698,22 +1802,30 @@ def archive_stage(force=False, dry_run=False, file_target: Optional[str] = None)
 
     dst = os.path.join(cfg.archive_exec_dir, filename)
     shutil.copy2(src, dst)
-
-    lines = read_text(cfg.stages_index).splitlines(True)
-    new_lines = []
-    for line in lines:
-        if filename in line and "（当前阶段）" in line:
-            line = line.replace(".stages/stages/", ".stages/archive/stages/")
-            line = line.replace("（当前阶段）", "（已归档）")
-            new_lines.append(line)
-            new_lines.append(f"   > {summary}\n")
-        else:
-            new_lines.append(line)
-    write_text(cfg.stages_index, "".join(new_lines))
-
-    update_session_summary(f"[归档自动化] 阶段 {filename} 已结项: {summary}")
     os.remove(src)
-
+    # lines = read_text(cfg.stages_index).splitlines(True)
+    # new_lines = []
+    # for line in lines:
+    #     if filename in line and "（当前阶段）" in line:
+    #         line = line.replace(".stages/stages/", ".stages/archive/stages/")
+    #         line = line.replace("（当前阶段）", "（已归档）")
+    #         new_lines.append(line)
+    #         new_lines.append(f"   > {summary}\n")
+    #     else:
+    #         new_lines.append(line)
+    # write_text(cfg.stages_index, "".join(new_lines))
+    # 重建索引
+    remaining_active = []
+    if os.path.exists(cfg.stages_exec_dir):
+        remaining_active = [
+            f for f in os.listdir(cfg.stages_exec_dir)
+            if f.endswith(".md")
+        ]
+    remaining_active = sorted(remaining_active, key=_extract_stage_num)
+    next_current = remaining_active[0] if remaining_active else None
+    rewrite_stages_index(current_stage=next_current)
+    update_session_summary(f"[归档自动化] 阶段 {filename} 已结项: {summary}")
+    # os.remove(src)
     print("[OK] 归档完成。")
     return True
 
@@ -1817,16 +1929,8 @@ def main():
         content = initialize_stage_content(template, next_num, args.name)
         write_text(filepath, content)
 
-        lines = read_text(cfg.stages_index).splitlines(True)
-        inserted = False
-        for i, line in enumerate(lines):
-            if "阶段清单" in line:
-                lines.insert(i + 1, f"1. `.stages/stages/{filename}`（当前阶段）\n")
-                inserted = True
-                break
-        if not inserted:
-            lines.append(f"1. `.stages/stages/{filename}`（当前阶段）\n")
-        write_text(cfg.stages_index, "".join(lines))
+        # 新建阶段后，重建索引，并将新阶段设为唯一当前阶段
+        rewrite_stages_index(current_stage=filename)
 
         update_heartbeat()
         print(f"[*] 初始化阶段: {filename}")
