@@ -38,6 +38,7 @@ TEMPLATE_PATH = os.path.join(SKILL_DIR, "references", "stage_template.md")
 ALLOWED_STAGE_STATUS = {"PLANNING", "IN_PROGRESS", "TESTING", "COMPLETED", "ARCHIVED"}
 ALLOWED_LOG_STATUS = {"已完成", "进行中", "阻塞"}
 ALLOWED_EXECUTOR = {"human", "agent", "sub_agent"}
+ALLOWED_VERIFY_BY = {"task_completion", "evidence_review", "metric_threshold", "artifact_presence"}
 
 
 @dataclass
@@ -52,13 +53,6 @@ class _PathConfig:
     archive_exec_dir: str = ""
 
     def configure(self, project_root: str):
-        """
-        根据项目根目录计算并填充所有资产路径。
-        Args:
-            project_root: 项目根目录（可为相对或绝对路径）。
-        Side Effects:
-            更新实例上的路径字段。
-        """
         self.root_dir = os.path.abspath(project_root)
         self.asset_root = os.path.join(self.root_dir, ".stages")
         self.backlog_file = os.path.join(self.asset_root, "BACKLOGS.md")
@@ -106,58 +100,24 @@ STRINGS = {
 # -------------------------------------------------------------------
 
 def now_date() -> str:
-    """
-    返回当前本地日期字符串。
-    Returns:
-        str: YYYY-MM-DD 格式日期。
-    """
     return datetime.now().strftime("%Y-%m-%d")
 
 
 def now_datetime() -> str:
-    """
-    返回当前本地日期时间字符串。
-    Returns:
-        str: YYYY-MM-DD HH:MM 格式时间。
-    """
     return datetime.now().strftime("%Y-%m-%d %H:%M")
 
 
 def read_text(path: str) -> str:
-    """
-    读取 UTF-8 文本文件内容。
-    Args:
-        path: 文件路径。
-    Returns:
-        str: 文件全文内容。
-    """
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
 
 
 def write_text(path: str, content: str):
-    """
-    以 UTF-8 覆盖写入文本文件。
-    Args:
-        path: 文件路径。
-        content: 写入内容。
-    Side Effects:
-        覆盖目标文件内容。
-    """
     with open(path, "w", encoding="utf-8") as f:
         f.write(content)
 
 
-def discover_project_root(root_override=None):
-    """
-    推断项目根目录。
-    Args:
-        root_override: 手动指定根目录（可为空）。
-    Returns:
-        str: 解析后的绝对路径。
-    Notes:
-        优先级：root_override > STAGE_MANAGER_ROOT > 向上探测 .git/.stages。
-    """
+def discover_project_root(root_override: Optional[str] = None) -> str:
     if root_override:
         return os.path.abspath(root_override)
 
@@ -176,40 +136,22 @@ def discover_project_root(root_override=None):
         probe = parent
 
 
-def get_git_info():
-    """
-    获取当前 Git 短哈希标识。
-    Returns:
-        str: 形如 git@<hash> 的标识；若失败则返回 local-env。
-    """
+def get_git_info() -> str:
     try:
-        devnull = subprocess.DEVNULL
         git_hash = subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"],
-            stderr=devnull,
+            stderr=subprocess.DEVNULL,
         ).decode().strip()
         return f"git@{git_hash}"
     except Exception:
         return "local-env"
 
 
-def get_sys_user():
-    """
-    读取系统用户名。
-    Returns:
-        str: USER/USERNAME 环境变量值，缺省为 unknown。
-    """
+def get_sys_user() -> str:
     return os.environ.get("USER") or os.environ.get("USERNAME") or "unknown"
 
 
 def slugify_name(name: str) -> str:
-    """
-    将名称归一化为文件安全的 slug。
-    Args:
-        name: 原始名称。
-    Returns:
-        str: 仅含小写字母、数字、-、_、. 的 slug。
-    """
     s = name.strip().lower()
     s = re.sub(r"\s+", "-", s)
     s = re.sub(r"[^a-z0-9\-_.]+", "-", s)
@@ -218,22 +160,10 @@ def slugify_name(name: str) -> str:
 
 
 def infer_stage_display_name(raw_name: str) -> str:
-    """
-    生成阶段展示名。
-    Args:
-        raw_name: 原始输入名称。
-    Returns:
-        str: 去除首尾空白后的名称，空值时返回 TBD。
-    """
     return raw_name.strip() if raw_name.strip() else "TBD"
 
 
 def ensure_structure():
-    """
-    确保 .stages 目录结构与索引文件存在。
-    Side Effects:
-        创建目录及缺失的索引文件并写入默认内容。
-    """
     for d in [cfg.asset_root, cfg.stages_exec_dir, cfg.archive_exec_dir]:
         os.makedirs(d, exist_ok=True)
 
@@ -275,23 +205,14 @@ def ensure_structure():
 # frontmatter / markdown
 # -------------------------------------------------------------------
 
-def parse_frontmatter(content: str):
-    """
-    解析 frontmatter 并拆分正文。
-    Args:
-        content: 完整 Markdown 文本。
-    Returns:
-        Tuple[dict, str]: frontmatter 字典与正文内容。
-    Notes:
-        解析规则为简化键值/列表语法，并非完整 YAML。
-    """
+def parse_frontmatter(content: str) -> Tuple[dict, str]:
     m = re.match(r"^---\n(.*?)\n---\n(.*)$", content, re.S)
     if not m:
         return {}, content
 
     raw = m.group(1)
     body = m.group(2)
-    data = {}
+    data: Dict[str, object] = {}
 
     for line in raw.splitlines():
         if not line.strip():
@@ -314,8 +235,7 @@ def parse_frontmatter(content: str):
             if not inner:
                 data[key] = []
             else:
-                parts = [x.strip().strip('"') for x in inner.split(",") if x.strip()]
-                data[key] = parts
+                data[key] = [x.strip().strip('"') for x in inner.split(",") if x.strip()]
         else:
             data[key] = val
 
@@ -323,13 +243,6 @@ def parse_frontmatter(content: str):
 
 
 def dump_frontmatter(data: dict) -> str:
-    """
-    按固定字段顺序序列化 frontmatter。
-    Args:
-        data: frontmatter 字典。
-    Returns:
-        str: 序列化后的 frontmatter 文本（包含 --- 包围）。
-    """
     ordered_keys = [
         "stage_id",
         "name",
@@ -358,44 +271,19 @@ def dump_frontmatter(data: dict) -> str:
 
 
 def replace_frontmatter(content: str, updates: dict) -> str:
-    """
-    合并更新并替换 frontmatter。
-    Args:
-        content: 原始文档内容。
-        updates: 需要更新的字段。
-    Returns:
-        str: 更新后的完整文档内容。
-    """
     current, body = parse_frontmatter(content)
     current.update(updates)
     return dump_frontmatter(current) + "\n" + body.lstrip("\n")
 
 
 def update_title(content: str, stage_id: str, name: str) -> str:
-    """
-    更新文档一级标题为阶段标题。
-    Args:
-        content: 原始文档内容。
-        stage_id: 阶段 ID。
-        name: 阶段名称。
-    Returns:
-        str: 更新后的内容。
-    """
     new_title = f"# {stage_id}: {name}"
     if re.search(r"^# .*?$", content, re.M):
         return re.sub(r"^# .*?$", new_title, content, count=1, flags=re.M)
     return new_title + "\n\n" + content
 
 
-def find_section_block(content: str, section_no: int):
-    """
-    按编号查找 section 块。
-    Args:
-        content: 文档内容。
-        section_no: section 编号（例如 4 表示 "## 4."）。
-    Returns:
-        Optional[Tuple[int, int, str, str]]: (start, end, header, body) 或 None。
-    """
+def find_section_block(content: str, section_no: int) -> Optional[Tuple[int, int, str, str]]:
     pattern = rf"(^## {section_no}\..*?$)(.*?)(?=^## \d+\.|\Z)"
     m = re.search(pattern, content, re.M | re.S)
     if not m:
@@ -404,15 +292,6 @@ def find_section_block(content: str, section_no: int):
 
 
 def replace_section_body(content: str, section_no: int, new_body: str) -> str:
-    """
-    替换指定 section 的正文内容。
-    Args:
-        content: 文档内容。
-        section_no: section 编号。
-        new_body: 新的正文文本。
-    Returns:
-        str: 更新后的内容；若未找到 section 则返回原文。
-    """
     block = find_section_block(content, section_no)
     if not block:
         return content
@@ -422,17 +301,12 @@ def replace_section_body(content: str, section_no: int, new_body: str) -> str:
     return content[:start] + replacement + content[end:]
 
 
-def prepend_to_section_body(content: str, section_no: int, block_text: str, remove_placeholder_tbd=False) -> str:
-    """
-    向 section 正文前插入内容块。
-    Args:
-        content: 文档内容。
-        section_no: section 编号。
-        block_text: 待插入文本块。
-        remove_placeholder_tbd: 是否移除“暂无”占位。
-    Returns:
-        str: 更新后的内容。
-    """
+def prepend_to_section_body(
+    content: str,
+    section_no: int,
+    block_text: str,
+    remove_placeholder_tbd: bool = False,
+) -> str:
     section = find_section_block(content, section_no)
     if not section:
         return content
@@ -455,39 +329,40 @@ def prepend_to_section_body(content: str, section_no: int, block_text: str, remo
 
 
 # -------------------------------------------------------------------
-# 路径解析
+# 路径解析 / 索引
 # -------------------------------------------------------------------
 
-def get_latest_stage_info():
-  """
-  从 STAGES.md 中定位唯一当前阶段。
-  返回 (active_filename_or_none, max_stage_num_str)
-  """
-  ensure_structure()
+def _extract_stage_num(filename: str) -> int:
+    m = re.search(r"stage-(\d+)-", filename)
+    return int(m.group(1)) if m else 999999
 
-  active_files = []
-  if os.path.exists(cfg.stages_exec_dir):
-      active_files = [f for f in os.listdir(cfg.stages_exec_dir) if f.endswith(".md")]
 
-  max_num = f"{max((_extract_stage_num(f) for f in active_files), default=0):03d}"
+def list_active_stage_files() -> List[str]:
+    if not os.path.exists(cfg.stages_exec_dir):
+        return []
+    files = [f for f in os.listdir(cfg.stages_exec_dir) if f.endswith(".md")]
+    return sorted(files, key=_extract_stage_num)
 
-  if not os.path.exists(cfg.stages_index):
-      return None, max_num
 
-  content = read_text(cfg.stages_index)
-  active_match = re.search(r"`\.stages/stages/(stage-\d+-.*?\.md)`（当前阶段）", content)
+def get_latest_stage_info() -> Tuple[Optional[str], str]:
+    ensure_structure()
 
-  return (active_match.group(1) if active_match else None), max_num
+    active_files = []
+    if os.path.exists(cfg.stages_exec_dir):
+        active_files = [f for f in os.listdir(cfg.stages_exec_dir) if f.endswith(".md")]
+
+    max_num = f"{max((_extract_stage_num(f) for f in active_files), default=0):03d}"
+
+    if not os.path.exists(cfg.stages_index):
+        return None, max_num
+
+    content = read_text(cfg.stages_index)
+    active_match = re.search(r"`\.stages/stages/(stage-\d+-.*?\.md)`（当前阶段）", content)
+
+    return (active_match.group(1) if active_match else None), max_num
 
 
 def resolve_stage_file(target: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
-    """
-    解析阶段文件位置。
-    Args:
-        target: None 表示当前活跃阶段；也可传文件名或相对/绝对路径。
-    Returns:
-        Tuple[Optional[str], Optional[str]]: (filename, absolute_path)。
-    """
     if not target:
         active_file, _ = get_latest_stage_info()
         if not active_file:
@@ -508,38 +383,11 @@ def resolve_stage_file(target: Optional[str] = None) -> Tuple[Optional[str], Opt
     return None, None
 
 
-# -------------------------------------------------------------------
-# 统计
-# -------------------------------------------------------------------
-def list_active_stage_files() -> List[str]:
-    """列出所有活跃阶段文件名，按阶段编号排序。"""
-    if not os.path.exists(cfg.stages_exec_dir):
-        return []
-    files = [f for f in os.listdir(cfg.stages_exec_dir) if f.endswith(".md")]
-    return sorted(files, key=_extract_stage_num)
-
-def _extract_stage_num(filename: str) -> int:
-    """从文件名中提取阶段编号，若无匹配返回最大值 999999。"""
-    m = re.search(r"stage-(\d+)-", filename)
-    return int(m.group(1)) if m else 999999
-
 def rewrite_stages_index(current_stage: Optional[str] = None):
-    """
-    重建 STAGES.md 的阶段清单，保证：
-    - archive/stages 下的文件标记为 （已归档）
-    - stages 下的文件若为 current_stage，则标记为 （当前阶段）
-    - stages 下的其余文件标记为 （活跃阶段）
-    - 任意时刻只允许一个 （当前阶段）
-    """
     ensure_structure()
 
-    # 读取现有文件，保留“快速状态”区域
     existing = read_text(cfg.stages_index) if os.path.exists(cfg.stages_index) else ""
-    quick_status_match = re.search(
-        r"(^---\n\n## 快速状态.*$)",
-        existing,
-        re.M | re.S,
-    )
+    quick_status_match = re.search(r"(^---\n\n## 快速状态.*$)", existing, re.M | re.S)
 
     quick_status_block = quick_status_match.group(1) if quick_status_match else (
         "---\n\n"
@@ -553,30 +401,19 @@ def rewrite_stages_index(current_stage: Optional[str] = None):
     archived_files = []
 
     if os.path.exists(cfg.stages_exec_dir):
-        active_files = [
-            f for f in os.listdir(cfg.stages_exec_dir)
-            if f.endswith(".md")
-        ]
+        active_files = [f for f in os.listdir(cfg.stages_exec_dir) if f.endswith(".md")]
 
     if os.path.exists(cfg.archive_exec_dir):
-        archived_files = [
-            f for f in os.listdir(cfg.archive_exec_dir)
-            if f.endswith(".md")
-        ]
+        archived_files = [f for f in os.listdir(cfg.archive_exec_dir) if f.endswith(".md")]
 
     active_files = sorted(active_files, key=_extract_stage_num)
     archived_files = sorted(archived_files, key=_extract_stage_num)
 
-    # 若未显式传 current_stage，则尝试沿用旧索引中的当前阶段
     if not current_stage:
-        old_current_match = re.search(
-            r"`\.stages/stages/(stage-\d+-.*?\.md)`（当前阶段）",
-            existing,
-        )
+        old_current_match = re.search(r"`\.stages/stages/(stage-\d+-.*?\.md)`（当前阶段）", existing)
         if old_current_match and old_current_match.group(1) in active_files:
             current_stage = old_current_match.group(1)
 
-    # 如果仍为空，但存在未归档阶段，则默认第一个阶段为当前阶段
     if not current_stage and active_files:
         current_stage = active_files[0]
 
@@ -588,7 +425,6 @@ def rewrite_stages_index(current_stage: Optional[str] = None):
 
     index = 1
 
-    # 未归档阶段：当前阶段排前，其余活跃阶段随后
     if active_files:
         ordered_active = []
         if current_stage and current_stage in active_files:
@@ -600,7 +436,6 @@ def rewrite_stages_index(current_stage: Optional[str] = None):
             lines.append(f"{index}. `.stages/stages/{f}`（{status}）\n")
             index += 1
 
-    # 已归档阶段
     for f in archived_files:
         lines.append(f"{index}. `.stages/archive/stages/{f}`（已归档）\n")
         index += 1
@@ -610,23 +445,14 @@ def rewrite_stages_index(current_stage: Optional[str] = None):
 
     write_text(cfg.stages_index, "".join(lines))
 
-def count_adrs_from_index():
-    """
-    统计 ADR 索引中的条目数量。
-    Returns:
-        int: ADR 数量。
-    """
+
+def count_adrs_from_index() -> int:
     if not os.path.exists(cfg.adr_index):
         return 0
     return len(re.findall(r"\[ADRS-\d+\]", read_text(cfg.adr_index)))
 
 
-def get_last_session_text():
-    """
-    读取最近会话快照文本。
-    Returns:
-        str: 最近会话摘要，缺失时返回“暂无记录”。
-    """
+def get_last_session_text() -> str:
     if not os.path.exists(cfg.session_file):
         return "暂无记录"
     content = read_text(cfg.session_file)
@@ -634,16 +460,241 @@ def get_last_session_text():
     return match.group(1).strip() if match else "暂无记录"
 
 
-def calculate_progress(filepath):
-    """
-    计算阶段文件任务完成度。
-    Args:
-        filepath: 阶段文件路径。
-    Returns:
-        int: 完成度百分比（0-100）。
-    Notes:
-        仅统计 section 4/5 中的 checklist。
-    """
+# -------------------------------------------------------------------
+# 列表 / 字段解析
+# -------------------------------------------------------------------
+
+def parse_bracket_list(text: str) -> List[str]:
+    text = text.strip()
+    if text == "[]":
+        return []
+    if text.startswith("[") and text.endswith("]"):
+        inner = text[1:-1].strip()
+        if not inner:
+            return []
+        return [x.strip().strip('"') for x in inner.split(",") if x.strip()]
+    return []
+
+
+def format_bracket_list(items: List[str]) -> str:
+    if not items:
+        return "[]"
+    return "[" + ",".join(items) + "]"
+
+
+def clean_summary_text(text: str) -> str:
+    if not text:
+        return "N/A"
+
+    cleaned = text
+    cleaned = cleaned.replace("**", "")
+    cleaned = re.sub(r"^- ###\s*", "", cleaned, flags=re.M)
+    cleaned = re.sub(r"^\s*-\s*\[x\]\s*", "", cleaned, flags=re.M | re.I)
+    cleaned = re.sub(r"^\s*-\s*\[ \]\s*", "", cleaned, flags=re.M)
+    cleaned = re.sub(r"^\s*-\s*", "", cleaned, flags=re.M)
+    cleaned = re.sub(r"\s+", " ", cleaned)
+
+    return cleaned.strip() or "N/A"
+
+
+def extract_summary_brief(content: str) -> str:
+    section = re.search(r"^## 9\..*?(?=^## \d+\.|\Z)", content, re.M | re.S)
+    if not section:
+        return "N/A"
+
+    block = section.group(0)
+
+    title_match = re.search(
+        r"^- ### \[SUMMARY-\d+\] \| \[\d{4}-\d{2}-\d{2}\] \| \[(.*?)\] \| \[Ver:.*?\]",
+        block,
+        re.M,
+    )
+    goal_match = re.search(r"^\s*- \*\*里程碑目标\*\*: (.*)$", block, re.M)
+    result_matches = re.findall(r"^\s*-\s*\[x\]\s+(.*)$", block, re.M)
+    audit_match = re.search(r"^\s*- \*\*变更审计\*\*: (.*)$", block, re.M)
+
+    parts = []
+    if title_match:
+        parts.append(title_match.group(1).strip())
+    if goal_match:
+        parts.append(f"目标：{goal_match.group(1).strip()}")
+    if result_matches:
+        parts.append("成果：" + "；".join(r.strip() for r in result_matches[:2]))
+    if audit_match:
+        parts.append(f"变更：{audit_match.group(1).strip()}")
+
+    if not parts:
+        raw_lines = []
+        for line in block.splitlines():
+            s = line.strip()
+            if not s or s.startswith("## ") or s.startswith(">"):
+                continue
+            raw_lines.append(s)
+        return clean_summary_text(" ".join(raw_lines))[:240] or "N/A"
+
+    return " | ".join(parts)[:240]
+
+
+def parse_task_line(task_line: str) -> Optional[Dict[str, object]]:
+    raw = task_line.strip()
+    m = re.match(r"^\-\s*\[([ xX])\]\s+\[(P\d+)\]\s+\[(TASK-\d{3}|TASK-TBD)\]\s+(.*)$", raw)
+    if not m:
+        return None
+
+    checked = m.group(1).lower() == "x"
+    priority = m.group(2)
+    task_id = m.group(3)
+    tail = m.group(4)
+
+    parts = [p.strip() for p in tail.split("|")]
+    if not parts:
+        return None
+
+    name = parts[0].strip()
+    fields: Dict[str, str] = {}
+    for part in parts[1:]:
+        if "=" not in part:
+            continue
+        k, v = part.split("=", 1)
+        fields[k.strip()] = v.strip()
+
+    return {
+        "checked": checked,
+        "priority": priority,
+        "task_id": task_id,
+        "name": name,
+        "owner": fields.get("owner", ""),
+        "executor": fields.get("executor", ""),
+        "skills": parse_bracket_list(fields.get("skills", "[]")),
+        "task_depends_on": parse_bracket_list(fields.get("task_depends_on", "[]")),
+        "acceptance": parse_bracket_list(fields.get("acceptance", "[]")),
+        "deliverables": parse_bracket_list(fields.get("deliverables", "[]")),
+        "evidence": parse_bracket_list(fields.get("evidence", "[]")),
+        "due": fields.get("due", ""),
+    }
+
+
+def parse_ac_line(ac_line: str) -> Optional[Dict[str, object]]:
+    raw = ac_line.strip()
+    m = re.match(r"^\-\s*\[([ xX])\]\s+\[(AC-\d{3})\]\s+(.*)$", raw)
+    if not m:
+        return None
+
+    checked = m.group(1).lower() == "x"
+    tail = m.group(3)
+
+    parts = [p.strip() for p in tail.split("|")]
+    if not parts:
+        return None
+
+    name = parts[0].strip().replace("**", "")
+    fields: Dict[str, str] = {}
+    for part in parts[1:]:
+        if "=" not in part:
+            continue
+        k, v = part.split("=", 1)
+        fields[k.strip()] = v.strip()
+
+    return {
+        "checked": checked,
+        "ac_id": m.group(2),
+        "name": name,
+        "verify_by": fields.get("verify_by", ""),
+        "required_tasks": parse_bracket_list(fields.get("required_tasks", "[]")),
+        "required_checks": parse_bracket_list(fields.get("required_checks", "[]")),
+        "evidence": parse_bracket_list(fields.get("evidence", "[]")),
+    }
+
+
+def validate_task_line(task_line: str) -> List[str]:
+    errs: List[str] = []
+    parsed = parse_task_line(task_line)
+    if not parsed:
+        errs.append(f"任务格式非法: {task_line}")
+        return errs
+
+    if parsed["executor"] not in ALLOWED_EXECUTOR:
+        errs.append(f"{parsed['task_id']} executor 非法: {parsed['executor']}")
+
+    due = str(parsed.get("due", "")).strip()
+    if due and due not in {"YYYY-MM-DD", "null"}:
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", due):
+            errs.append(f"{parsed['task_id']} due 日期格式非法: {due}")
+
+    for dep in parsed["task_depends_on"]:
+        if not re.fullmatch(r"TASK-\d{3}|TASK-TBD", dep):
+            errs.append(f"{parsed['task_id']} task_depends_on 非法: {dep}")
+
+    for ac in parsed["acceptance"]:
+        if not re.fullmatch(r"AC-\d{3}", ac):
+            errs.append(f"{parsed['task_id']} acceptance 非法: {ac}")
+
+    return errs
+
+
+def validate_ac_line(ac_line: str) -> List[str]:
+    errs: List[str] = []
+    parsed = parse_ac_line(ac_line)
+    if not parsed:
+        errs.append(f"验收项格式非法: {ac_line}")
+        return errs
+
+    verify_by = str(parsed["verify_by"])
+    if verify_by not in ALLOWED_VERIFY_BY:
+        errs.append(f"{parsed['ac_id']} verify_by 非法: {verify_by}")
+
+    for task_id in parsed["required_tasks"]:
+        if not re.fullmatch(r"TASK-\d{3}|TASK-TBD", task_id):
+            errs.append(f"{parsed['ac_id']} required_tasks 非法: {task_id}")
+
+    return errs
+
+
+def next_task_id(filepath: str) -> str:
+    if not os.path.exists(filepath):
+        return "TASK-001"
+
+    content = read_text(filepath)
+    ids = re.findall(r"\[(TASK-(\d{3}))\]", content)
+    nums = []
+    for full, num in ids:
+        try:
+            n = int(num)
+            if 1 <= n < 900:
+                nums.append(n)
+        except ValueError:
+            continue
+    nxt = max(nums, default=0) + 1
+    return f"TASK-{nxt:03d}"
+
+
+def normalize_backlog_task_line(task_line: str, new_task_id: str) -> str:
+    raw = task_line.strip()
+
+    if parse_task_line(raw):
+        return raw if raw.startswith("- [ ]") else f"- [ ] {raw}"
+
+    raw = re.sub(r"^\-\s*\[[ xX]\]\s*", "", raw).strip()
+
+    prio = "P1"
+    m = re.match(r"^\[(P\d+)\]\s+(.*)$", raw)
+    if m:
+        prio = m.group(1)
+        name = m.group(2).strip()
+    else:
+        name = raw
+
+    return (
+        f"- [ ] [{prio}] [{new_task_id}] {name} | owner=unassigned | executor=agent | "
+        f"skills=[] | task_depends_on=[] | acceptance=[] | deliverables=[] | evidence=[] | due=YYYY-MM-DD"
+    )
+
+
+# -------------------------------------------------------------------
+# 统计 / 推断
+# -------------------------------------------------------------------
+
+def calculate_progress(filepath: str) -> int:
     if not os.path.exists(filepath):
         return 0
 
@@ -661,14 +712,7 @@ def calculate_progress(filepath):
     return int((done / len(all_marks)) * 100)
 
 
-def get_project_stats():
-    """
-    汇总项目统计数据并拼接为状态字符串。
-    Returns:
-        str: 阶段/任务/ADR 统计摘要。
-    Side Effects:
-        确保目录结构存在。
-    """
+def get_project_stats() -> str:
     ensure_structure()
 
     done_stages = len([f for f in os.listdir(cfg.archive_exec_dir) if f.endswith(".md")]) if os.path.exists(cfg.archive_exec_dir) else 0
@@ -684,21 +728,20 @@ def get_project_stats():
     active_file, active_path = resolve_stage_file(None)
     if active_file and active_path and os.path.exists(active_path):
         content = read_text(active_path)
-        sections = re.findall(r"^## [45]\..*?(?=^## \d+\.|\Z)", content, re.M | re.S)
-        for s in sections:
-            total_done_tasks += len(re.findall(r"^\s*(?:-\s*|\d+\.\s*)\[(x|X)\]", s, re.M))
-            total_pending_tasks += len(re.findall(r"^\s*(?:-\s*|\d+\.\s*)\[ \]", s, re.M))
+        task_section = find_section_block(content, 4)
+        ac_section = find_section_block(content, 5)
+        for section in [task_section, ac_section]:
+            if not section:
+                continue
+            _s, _e, _h, body = section
+            total_done_tasks += len(re.findall(r"^\s*(?:-\s*|\d+\.\s*)\[(x|X)\]", body, re.M))
+            total_pending_tasks += len(re.findall(r"^\s*(?:-\s*|\d+\.\s*)\[ \]", body, re.M))
 
     adr_c = count_adrs_from_index()
     return f"阶段(归档/活跃): {done_stages}/{active_stages} | 任务(完成/待办): {total_done_tasks}/{total_pending_tasks} | 决策: {adr_c}"
 
 
 def update_heartbeat():
-    """
-    刷新 STAGES.md 的心跳、最近会话与同步时间。
-    Side Effects:
-        覆盖写入 STAGES.md。
-    """
     ensure_structure()
     stats = get_project_stats()
     last_session = get_last_session_text()
@@ -724,206 +767,116 @@ def update_heartbeat():
     write_text(cfg.stages_index, "".join(lines))
 
 
-# -------------------------------------------------------------------
-# 任务解析与归一化
-# -------------------------------------------------------------------
-def clean_summary_text(text: str) -> str:
-    """
-    清洗摘要文本为单行纯文本。
-    Args:
-        text: 原始 Markdown/列表文本。
-    Returns:
-        str: 去除格式后的摘要文本，空值时返回 N/A。
-    """
-    if not text:
-        return "N/A"
+def infer_stage_type(content: str) -> str:
+    text = content.lower()
+    implement_keywords = [
+        "implement", "refactor", "fix", "integrate", "migrate", "replace",
+        "实现", "改造", "重构", "修复", "接入", "替换", "迁移",
+    ]
+    planning_keywords = [
+        "blueprint", "design", "audit", "review", "planning", "analysis",
+        "蓝图", "方案", "审计", "评审", "规划", "分析",
+    ]
 
-    cleaned = text
-
-    # 去掉 markdown 粗体
-    cleaned = cleaned.replace("**", "")
-
-    # 去掉 summary/log 头部标记
-    cleaned = re.sub(r"^- ###\s*", "", cleaned, flags=re.M)
-
-    # 去掉 checklist 标记
-    cleaned = re.sub(r"^\s*-\s*\[x\]\s*", "", cleaned, flags=re.M | re.I)
-    cleaned = re.sub(r"^\s*-\s*\[ \]\s*", "", cleaned, flags=re.M)
-
-    # 去掉普通 bullet
-    cleaned = re.sub(r"^\s*-\s*", "", cleaned, flags=re.M)
-
-    # 合并空白
-    cleaned = re.sub(r"\s+", " ", cleaned)
-
-    return cleaned.strip() or "N/A"
+    if any(k in text for k in implement_keywords):
+        return "implementation"
+    if any(k in text for k in planning_keywords):
+        return "planning"
+    return "planning"
 
 
-def extract_summary_brief(content: str) -> str:
-    """
-    从阶段总结区块提取简短摘要。
-    Args:
-        content: 阶段文档全文。
-    Returns:
-        str: 适合写入索引/会话的摘要（<=240 字符）。
-    Notes:
-        优先使用 SUMMARY/里程碑/成果/变更审计；否则降级清洗。
-    """
-    section = re.search(r"^## 9\..*?(?=^## \d+\.|\Z)", content, re.M | re.S)
+def check_p0_completed(filepath: str) -> Tuple[bool, List[str]]:
+    if not os.path.exists(filepath):
+        return True, []
+
+    content = read_text(filepath)
+    task_section = find_section_block(content, 4)
+    if not task_section:
+        return True, []
+
+    _s, _e, _h, body = task_section
+    pending = []
+    for line in re.findall(r"^\s*-\s*\[[ xX]\].*$", body, re.M):
+        parsed = parse_task_line(line)
+        if parsed and parsed["priority"] == "P0" and not parsed["checked"]:
+            pending.append(line.strip())
+
+    return len(pending) == 0, pending
+
+
+def check_dod_completed(filepath: str) -> Tuple[bool, List[str]]:
+    if not os.path.exists(filepath):
+        return True, []
+
+    content = read_text(filepath)
+    dod_section = find_section_block(content, 5)
+    if not dod_section:
+        return True, []
+
+    _s, _e, _h, body = dod_section
+    pending = re.findall(r"^\s*-\s*\[ \].*$", body, re.M)
+    return len(pending) == 0, pending
+
+
+def has_summary_content(filepath: str) -> bool:
+    if not os.path.exists(filepath):
+        return False
+    content = read_text(filepath)
+    section = find_section_block(content, 9)
     if not section:
-        return "N/A"
-
-    block = section.group(0)
-
-    title_match = re.search(
-        r"^- ### \[SUMMARY-\d+\] \| \[\d{4}-\d{2}-\d{2}\] \| \[(.*?)\] \| \[Ver:.*?\]",
-        block,
-        re.M,
-    )
-    goal_match = re.search(r"^\s*- \*\*里程碑目标\*\*: (.*)$", block, re.M)
-    result_matches = re.findall(r"^\s*-\s*\[x\]\s+(.*)$", block, re.M)
-    audit_match = re.search(r"^\s*- \*\*变更审计\*\*: (.*)$", block, re.M)
-
-    parts = []
-
-    if title_match:
-        parts.append(title_match.group(1).strip())
-
-    if goal_match:
-        parts.append(f"目标：{goal_match.group(1).strip()}")
-
-    if result_matches:
-        parts.append("成果：" + "；".join(r.strip() for r in result_matches[:2]))
-
-    if audit_match:
-        parts.append(f"变更：{audit_match.group(1).strip()}")
-
-    if not parts:
-        # 兜底：把 section 内容做一次清洗后截断
-        raw_lines = []
-        for line in block.splitlines():
-            s = line.strip()
-            if not s or s.startswith("## ") or s.startswith(">"):
-                continue
-            raw_lines.append(s)
-        return clean_summary_text(" ".join(raw_lines))[:240] or "N/A"
-
-    return " | ".join(parts)[:240]
-
-def parse_task_line(task_line: str) -> Optional[Dict[str, str]]:
-    """
-    解析结构化任务行。
-    Args:
-        task_line: 任务行文本。
-    Returns:
-        Optional[Dict[str, str]]: 解析结果字段字典，格式非法返回 None。
-    """
-    raw = task_line.strip()
-    raw = re.sub(r"^\-\s*\[[ xX]\]\s*", "", raw)
-
-    parts = [p.strip() for p in raw.split("|")]
-    if not parts:
-        return None
-
-    first = parts[0]
-    prio_match = re.match(r"^\[(P\d+)\]\s+(.*)$", first)
-    if not prio_match:
-        return None
-
-    result = {
-        "priority": prio_match.group(1),
-        "name": prio_match.group(2).strip(),
-        "owner": "",
-        "executor": "",
-        "skills": "",
-        "task_depends_on": "",
-        "due": "",
-    }
-
-    for part in parts[1:]:
-        if "=" not in part:
-            continue
-        k, v = part.split("=", 1)
-        result[k.strip()] = v.strip()
-
-    return result
+        return False
+    _s, _e, _h, body = section
+    return not bool(re.fullmatch(r"\s*-\s*暂无\s*", body.strip()))
 
 
-def validate_task_line(task_line: str) -> List[str]:
-    """
-    校验任务行字段合法性。
-    Args:
-        task_line: 任务行文本。
-    Returns:
-        List[str]: 错误信息列表；为空表示通过。
-    """
-    errs = []
-    parsed = parse_task_line(task_line)
-    if not parsed:
-        errs.append(f"任务格式非法: {task_line}")
-        return errs
+def check_implementation_evidence(filepath: str) -> Tuple[bool, List[str]]:
+    if not os.path.exists(filepath):
+        return False, []
 
-    if parsed.get("executor") and parsed["executor"] not in ALLOWED_EXECUTOR:
-        errs.append(f"executor 非法: {parsed['executor']}")
+    content = read_text(filepath)
+    if infer_stage_type(content) != "implementation":
+        return True, []
 
-    due = parsed.get("due", "")
-    if due and due != "YYYY-MM-DD" and due != "null":
-        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", due):
-            errs.append(f"due 日期格式非法: {due}")
+    task_section = find_section_block(content, 4)
+    ac_section = find_section_block(content, 5)
 
-    return errs
+    evidence_paths: List[str] = []
 
+    if task_section:
+        _s, _e, _h, body = task_section
+        for line in re.findall(r"^\s*-\s*\[[ xX]\].*$", body, re.M):
+            parsed = parse_task_line(line)
+            if parsed:
+                evidence_paths.extend(parsed["evidence"])
 
-def normalize_backlog_task_line(task_line: str) -> str:
-    """
-    将 Backlog 任务归一为结构化格式。
-    Args:
-        task_line: 任务行文本。
-    Returns:
-        str: 规范化后的任务行。
-    Notes:
-        若缺少优先级会默认 P1 并补充占位字段。
-    """
-    raw = task_line.strip()
+    if ac_section:
+        _s, _e, _h, body = ac_section
+        for line in re.findall(r"^\s*-\s*\[[ xX]\].*$", body, re.M):
+            parsed = parse_ac_line(line)
+            if parsed:
+                evidence_paths.extend(parsed["evidence"])
 
-    if parse_task_line(raw):
-        return raw if raw.startswith("- [ ]") else f"- [ ] {raw}"
-
-    raw = re.sub(r"^\-\s*\[[ xX]\]\s*", "", raw).strip()
-
-    prio = "P1"
-    m = re.match(r"^\[(P\d+)\]\s+(.*)$", raw)
-    if m:
-        prio = m.group(1)
-        name = m.group(2).strip()
-    else:
-        name = raw
-
-    return (
-        f"- [ ] [{prio}] {name} | owner=unassigned | executor=agent | "
-        f"skills=[] | task_depends_on=[] | due=YYYY-MM-DD"
-    )
+    evidence_paths = list(dict.fromkeys(evidence_paths))
+    real_impl_paths = [
+        p for p in evidence_paths
+        if p and not p.startswith(".stage/")
+    ]
+    return len(real_impl_paths) > 0, real_impl_paths
 
 
-def get_pending_tasks(filepath):
-    """
-    提取未完成任务并按优先级排序。
-    Args:
-        filepath: 阶段文件路径。
-    Returns:
-        List[str]: 未完成任务列表。
-    """
+def get_pending_tasks(filepath: str) -> List[str]:
     if not os.path.exists(filepath):
         return []
 
     content = read_text(filepath)
-    breakdown_match = re.search(r"^## 4\..*?(?=^## \d+\.|\Z)", content, re.M | re.S)
+    breakdown_match = find_section_block(content, 4)
     if not breakdown_match:
         return []
 
-    tasks = re.findall(r"^\s*-\s*\[ \]\s+(.*)$", breakdown_match.group(0), re.M)
+    _s, _e, _h, body = breakdown_match
+    tasks = re.findall(r"^\s*-\s*\[ \]\s+(.*)$", body, re.M)
 
-    def p_score(t):
+    def p_score(t: str) -> int:
         m = re.search(r"\[P(\d+)\]", t)
         return int(m.group(1)) if m else 999
 
@@ -934,36 +887,7 @@ def get_pending_tasks(filepath):
 # 校验
 # -------------------------------------------------------------------
 
-def check_dod_completed(filepath):
-    """
-    检查 DoD 区块是否全部完成。
-    Args:
-        filepath: 阶段文件路径。
-    Returns:
-        Tuple[bool, List[str]]: (是否完成, 未完成条目)。
-    """
-    if not os.path.exists(filepath):
-        return True, []
-
-    content = read_text(filepath)
-    dod_section = re.search(r"^## 5\..*?(?=^## \d+\.|\Z)", content, re.M | re.S)
-    if not dod_section:
-        return True, []
-
-    pending_dod = re.findall(r"^\s*(?:-\s*|\d+\.\s*)\[ \].*$", dod_section.group(0), re.M)
-    return len(pending_dod) == 0, pending_dod
-
-
 def validate_stage_document(filepath: str) -> Tuple[List[str], List[str]]:
-    """
-    校验阶段文档结构与字段规范。
-    Args:
-        filepath: 阶段文件路径。
-    Returns:
-        Tuple[List[str], List[str]]: (errors, warns)。
-    Notes:
-        同时检查 frontmatter、section 完整性与任务格式。
-    """
     errors: List[str] = []
     warns: List[str] = []
 
@@ -999,14 +923,78 @@ def validate_stage_document(filepath: str) -> Tuple[List[str], List[str]]:
         if not find_section_block(content, sec):
             errors.append(f"缺少 section: ## {sec}.")
 
+    task_ids: List[str] = []
+    ac_ids: List[str] = []
+    task_to_ac_refs: Dict[str, List[str]] = {}
+    ac_to_task_refs: Dict[str, List[str]] = {}
+
     task_section = find_section_block(content, 4)
     if task_section:
         _s, _e, _h, body = task_section
         task_lines = re.findall(r"^\s*-\s*\[[ xX]\].*$", body, re.M)
-        for t in task_lines:
-            errors.extend(validate_task_line(t))
+
         if not task_lines:
             warns.append("任务拆解 section 中暂无 checklist 任务")
+
+        for t in task_lines:
+            errors.extend(validate_task_line(t))
+            parsed = parse_task_line(t)
+            if not parsed:
+                continue
+
+            task_id = str(parsed["task_id"])
+            task_ids.append(task_id)
+            task_to_ac_refs[task_id] = list(parsed["acceptance"])
+
+            if parsed["priority"] == "P0" and len(parsed["evidence"]) == 0:
+                warns.append(f"{task_id} 为 P0 任务但 evidence 为空")
+
+    ac_section = find_section_block(content, 5)
+    if ac_section:
+        _s, _e, _h, body = ac_section
+        ac_lines = re.findall(r"^\s*-\s*\[[ xX]\].*$", body, re.M)
+
+        if not ac_lines:
+            warns.append("验收标准 section 中暂无 checklist 验收项")
+
+        for line in ac_lines:
+            errors.extend(validate_ac_line(line))
+            parsed = parse_ac_line(line)
+            if not parsed:
+                continue
+
+            ac_id = str(parsed["ac_id"])
+            ac_ids.append(ac_id)
+            ac_to_task_refs[ac_id] = list(parsed["required_tasks"])
+
+            if parsed["verify_by"] == "artifact_presence" and len(parsed["evidence"]) == 0:
+                errors.append(f"{ac_id} verify_by=artifact_presence 时 evidence 不得为空")
+            elif len(parsed["evidence"]) == 0:
+                warns.append(f"{ac_id} evidence 为空")
+
+    # 唯一性校验
+    if len(task_ids) != len(set(task_ids)):
+        errors.append("任务 ID 存在重复")
+    if len(ac_ids) != len(set(ac_ids)):
+        errors.append("验收项 ID 存在重复")
+
+    # 交叉引用校验
+    task_id_set = set(task_ids)
+    ac_id_set = set(ac_ids)
+
+    for task_id, refs in task_to_ac_refs.items():
+        for ac_id in refs:
+            if ac_id not in ac_id_set:
+                errors.append(f"{task_id} 引用了不存在的验收项: {ac_id}")
+
+    for ac_id, refs in ac_to_task_refs.items():
+        for task_id in refs:
+            if task_id not in task_id_set:
+                errors.append(f"{ac_id} 引用了不存在的任务: {task_id}")
+
+    # 阶段验收任务建议
+    if "TASK-900" not in task_id_set:
+        warns.append("建议增加 TASK-900 阶段验收任务")
 
     log_section = find_section_block(content, 7)
     if log_section:
@@ -1020,6 +1008,12 @@ def validate_stage_document(filepath: str) -> Tuple[List[str], List[str]]:
         if re.fullmatch(r"\s*-\s*暂无\s*", body.strip()):
             warns.append("阶段总结为空")
 
+    stage_type = infer_stage_type(content)
+    if stage_type == "implementation":
+        ok, paths = check_implementation_evidence(filepath)
+        if not ok:
+            warns.append("实施型阶段尚未发现实际代码/测试/配置 evidence")
+
     return errors, warns
 
 
@@ -1027,18 +1021,7 @@ def validate_stage_document(filepath: str) -> Tuple[List[str], List[str]]:
 # ADR / session
 # -------------------------------------------------------------------
 
-def update_adr_index(clean_msg, stage_file, is_archive=False):
-    """
-    追加 ADR 索引条目并更新统计。
-    Args:
-        clean_msg: ADR 标题内容。
-        stage_file: 关联阶段文件名。
-        is_archive: 是否归档阶段。
-    Returns:
-        str: 新生成的 ADR ID。
-    Side Effects:
-        覆盖写入 ADRS.md。
-    """
+def update_adr_index(clean_msg: str, stage_file: str, is_archive: bool = False) -> str:
     ensure_structure()
 
     lines = read_text(cfg.adr_index).splitlines(True)
@@ -1077,14 +1060,7 @@ def update_adr_index(clean_msg, stage_file, is_archive=False):
     return adr_id
 
 
-def _prune_session_entries(lines):
-    """
-    按最大条数裁剪会话摘要区块。
-    Args:
-        lines: 会话文件行列表。
-    Returns:
-        List[str]: 裁剪后的行列表。
-    """
+def _prune_session_entries(lines: List[str]) -> List[str]:
     entry_indices = [i for i, line in enumerate(lines) if line.startswith("### [")]
     if len(entry_indices) <= SESSION_MAX_ENTRIES:
         return lines
@@ -1092,14 +1068,7 @@ def _prune_session_entries(lines):
     return lines[:cutoff]
 
 
-def update_session_summary(text):
-    """
-    写入会话摘要并刷新心跳。
-    Args:
-        text: 摘要文本。
-    Side Effects:
-        更新 STAGE_SESSIONS.md 与 STAGES.md。
-    """
+def update_session_summary(text: str):
     ensure_structure()
 
     clean_text = clean_summary_text(text)
@@ -1135,13 +1104,6 @@ def update_session_summary(text):
 # -------------------------------------------------------------------
 
 def next_log_id(filepath: str) -> str:
-    """
-    生成下一个日志编号。
-    Args:
-        filepath: 阶段文件路径。
-    Returns:
-        str: 形如 LOG-001 的编号。
-    """
     if not os.path.exists(filepath):
         return "LOG-001"
     content = read_text(filepath)
@@ -1150,13 +1112,6 @@ def next_log_id(filepath: str) -> str:
 
 
 def next_summary_id(filepath: str) -> str:
-    """
-    生成下一个总结编号。
-    Args:
-        filepath: 阶段文件路径。
-    Returns:
-        str: 形如 SUMMARY-001 的编号。
-    """
     if not os.path.exists(filepath):
         return "SUMMARY-001"
     content = read_text(filepath)
@@ -1172,18 +1127,6 @@ def render_log_entry(
     next_action: Optional[str] = None,
     blocked_by: Optional[str] = None,
 ) -> str:
-    """
-    渲染进度日志条目。
-    Args:
-        filepath: 阶段文件路径。
-        message: 进展描述。
-        task_name: 关联任务名。
-        status: 日志状态。
-        next_action: 后续行动。
-        blocked_by: 阻塞依赖。
-    Returns:
-        str: Markdown 日志条目文本。
-    """
     log_id = next_log_id(filepath)
     date_str = now_date()
     user = get_sys_user()
@@ -1205,14 +1148,6 @@ def render_log_entry(
 
 
 def render_adr_entry(adr_id: str, title: str) -> str:
-    """
-    渲染 ADR 条目模板。
-    Args:
-        adr_id: ADR 编号。
-        title: ADR 标题。
-    Returns:
-        str: Markdown ADR 条目文本。
-    """
     date_str = now_date()
     return (
         f"- ### [{adr_id}] | [{date_str}] | [{title}]\n"
@@ -1231,18 +1166,6 @@ def render_summary_entry(
     change_audit: str,
     tech_debt: str,
 ) -> str:
-    """
-    渲染阶段总结条目。
-    Args:
-        filepath: 阶段文件路径。
-        name: 总结名称。
-        milestone_goal: 里程碑目标。
-        core_results: 核心成果列表。
-        change_audit: 变更审计。
-        tech_debt: 遗留风险/技术债。
-    Returns:
-        str: Markdown 总结条目文本。
-    """
     summary_id = next_summary_id(filepath)
     date_str = now_date()
     ver = get_git_info()
@@ -1260,50 +1183,10 @@ def render_summary_entry(
 
 
 # -------------------------------------------------------------------
-# heartbeat / 展示
+# 展示
 # -------------------------------------------------------------------
 
-def update_heartbeat():
-    """
-    刷新 STAGES.md 的心跳、最近会话与同步时间。
-    Side Effects:
-        覆盖写入 STAGES.md。
-    """
-    ensure_structure()
-    stats = get_project_stats()
-    last_session = get_last_session_text()
-    now = now_datetime()
-    user = get_sys_user()
-    ver = get_git_info()
-
-    lines = read_text(cfg.stages_index).splitlines(True)
-    found_sync = False
-
-    for i, line in enumerate(lines):
-        if "[HEARTBEAT]" in line:
-            lines[i] = f"- [HEARTBEAT] {stats}\n"
-        elif "[LAST_SESSION]" in line:
-            lines[i] = f"- [LAST_SESSION] {last_session}\n"
-        elif "最近同步" in line:
-            lines[i] = f"- 最近同步: {now} | 用户: {user} | Version: {ver}\n"
-            found_sync = True
-
-    if not found_sync:
-        lines.append(f"- 最近同步: {now} | 用户: {user} | Version: {ver}\n")
-
-    write_text(cfg.stages_index, "".join(lines))
-
-
-def show_status(file_target: Optional[str] = None):
-    """
-    输出项目健康度与近期摘要信息。
-    Args:
-        file_target: 指定阶段文件或 None。
-    Returns:
-        bool: 执行成功返回 True。
-    Side Effects:
-        打印到 stdout，并刷新心跳。
-    """
+def show_status(file_target: Optional[str] = None) -> bool:
     filename, filepath = resolve_stage_file(file_target)
 
     print("\n" + "=" * 50)
@@ -1339,14 +1222,7 @@ def show_status(file_target: Optional[str] = None):
     return True
 
 
-def bootstrap():
-    """
-    会话启动引导，输出概览与记忆锚点。
-    Returns:
-        bool: 执行成功返回 True。
-    Side Effects:
-        打印到 stdout。
-    """
+def bootstrap() -> bool:
     ensure_structure()
 
     print("\n" + "=" * 50)
@@ -1405,18 +1281,7 @@ def bootstrap():
 # backlog
 # -------------------------------------------------------------------
 
-def intake_backlog(keyword, dry_run=False, file_target: Optional[str] = None):
-    """
-    从 Backlog 认领任务并写入阶段文件。
-    Args:
-        keyword: 匹配关键字。
-        dry_run: 是否仅预览。
-        file_target: 指定阶段文件或 None。
-    Returns:
-        bool: 是否成功。
-    Side Effects:
-        修改 BACKLOGS.md 与阶段文件。
-    """
+def intake_backlog(keyword: str, dry_run: bool = False, file_target: Optional[str] = None) -> bool:
     filename, filepath = resolve_stage_file(file_target)
     if not filename or not filepath:
         print("[!] 错误：当前没有可操作的阶段文件。")
@@ -1437,7 +1302,24 @@ def intake_backlog(keyword, dry_run=False, file_target: Optional[str] = None):
         print(f"[!] 未在 BACKLOGS.md 中找到匹配 '{keyword}' 的任务。")
         return False
 
-    normalized_tasks = [normalize_backlog_task_line(t) for t in extracted_tasks]
+    normalized_tasks = []
+    next_ids = []
+    for raw in extracted_tasks:
+        new_id = next_task_id(filepath)
+        next_ids.append(new_id)
+        normalized_tasks.append(normalize_backlog_task_line(raw, new_id))
+
+        # 临时把 ID 占掉，避免同批重复
+        content_now = read_text(filepath)
+        fake_append = "\n" + normalized_tasks[-1]
+        write_text(filepath, content_now + fake_append)
+
+    # 回滚临时写入，后面统一正式写入
+    current_content = read_text(filepath)
+    trimmed = current_content
+    for task in normalized_tasks:
+        trimmed = trimmed.replace("\n" + task, "", 1)
+    write_text(filepath, trimmed)
 
     if dry_run:
         print(f"[DRY-RUN] 将从 Backlog 认领 {len(normalized_tasks)} 个任务至 {filename}:")
@@ -1464,16 +1346,7 @@ def intake_backlog(keyword, dry_run=False, file_target: Optional[str] = None):
     return True
 
 
-def route_backlog(tasks, stage_file, category_marker):
-    """
-    将任务分流写回 BACKLOGS.md。
-    Args:
-        tasks: 任务行列表。
-        stage_file: 来源阶段文件名。
-        category_marker: 分类标记（如 [TECH_DEBT]）。
-    Side Effects:
-        更新 BACKLOGS.md。
-    """
+def route_backlog(tasks: List[str], stage_file: str, category_marker: str):
     if not tasks:
         return
 
@@ -1503,60 +1376,18 @@ def route_backlog(tasks, stage_file, category_marker):
 # 初始化 / 日志 / 总结 / 归档
 # -------------------------------------------------------------------
 
-def check_stage_name_exists(name):
-    """
-    检查阶段名称是否已存在。
-    Args:
-        name: 需要检查的 slug/名称片段。
-    Returns:
-        Optional[str]: 匹配的文件名，未命中返回 None。
-    """
+def check_stage_name_exists(slug: str) -> Optional[str]:
+    pattern = re.compile(rf"^stage-\d+-{re.escape(slug)}\.md$")
     for d in [cfg.stages_exec_dir, cfg.archive_exec_dir]:
         if not os.path.exists(d):
             continue
         for f in os.listdir(d):
-            if f.endswith(".md") and name in f:
+            if pattern.match(f):
                 return f
     return None
 
 
-def seed_stage_body(content: str) -> str:
-    """
-    用默认占位内容替换模板中的示例。
-    Args:
-        content: 模板内容。
-    Returns:
-        str: 替换后的内容。
-    Notes:
-        主要更新任务拆解与风险表格两部分。
-    """
-    task_seed = (
-        "- [ ] [P0] 定义本阶段关键交付物 | owner=unassigned | executor=agent | "
-        "skills=[] | task_depends_on=[] | due=YYYY-MM-DD\n"
-        "- [ ] [P1] 补充阶段风险与边界 | owner=unassigned | executor=agent | "
-        "skills=[] | task_depends_on=[] | due=YYYY-MM-DD"
-    )
-
-    risk_seed = (
-        "| 风险描述 | 严重程度 | 触发信号 | 应对措施 | 回滚/降级方案 |\n"
-        "| :------- | :------- | :------- | :------- | :------------ |\n"
-    )
-
-    content = replace_section_body(content, 4, task_seed)
-    content = replace_section_body(content, 6, risk_seed)
-    return content
-
-
 def initialize_stage_content(template: str, next_num: str, stage_name: str) -> str:
-    """
-    基于模板生成新阶段文件内容。
-    Args:
-        template: 模板全文。
-        next_num: 阶段编号字符串。
-        stage_name: 原始阶段名称。
-    Returns:
-        str: 初始化后的阶段文档内容。
-    """
     stage_id = f"STAGE-{next_num}"
     display_name = infer_stage_display_name(stage_name)
 
@@ -1572,23 +1403,11 @@ def initialize_stage_content(template: str, next_num: str, stage_name: str) -> s
             "milestone": None,
         },
     )
-
     content = update_title(content, stage_id, display_name)
-    content = content.replace("<STAGE_NAME>", display_name)
-    content = re.sub(r"\| 示例风险.*?\n", "", content)
-    content = seed_stage_body(content)
     return content
 
 
 def next_stage_status_on_sync(current_status: Optional[str], log_status: str) -> str:
-    """
-    根据当前状态和日志状态推导新阶段状态。
-    Args:
-        current_status: 当前阶段状态。
-        log_status: 日志状态。
-    Returns:
-        str: 推导后的阶段状态。
-    """
     if current_status == "PLANNING":
         return "IN_PROGRESS"
     if current_status == "IN_PROGRESS" and log_status == "已完成":
@@ -1603,21 +1422,7 @@ def sync_log(
     next_action: Optional[str] = None,
     blocked_by: Optional[str] = None,
     file_target: Optional[str] = None,
-):
-    """
-    同步进展日志到阶段文件。
-    Args:
-        message: 日志内容。
-        task_name: 关联任务名。
-        status: 日志状态。
-        next_action: 后续行动。
-        blocked_by: 阻塞依赖。
-        file_target: 指定阶段文件或 None。
-    Returns:
-        bool: 是否成功。
-    Side Effects:
-        更新阶段文件、ADR 索引与心跳信息。
-    """
+) -> bool:
     filename, filepath = resolve_stage_file(file_target)
     if not filename or not filepath:
         print("[!] 当前没有可操作的阶段文件。")
@@ -1647,7 +1452,7 @@ def sync_log(
     content = prepend_to_section_body(content, 7, log_entry, remove_placeholder_tbd=True)
 
     fm, _ = parse_frontmatter(content)
-    new_status = next_stage_status_on_sync(fm.get("status"), status)
+    new_status = next_stage_status_on_sync(str(fm.get("status")), status)
     if new_status != fm.get("status"):
         content = replace_frontmatter(content, {"status": new_status})
 
@@ -1664,21 +1469,7 @@ def append_stage_summary(
     change_audit: str,
     tech_debt: str,
     file_target: Optional[str] = None,
-):
-    """
-    向阶段文档追加总结条目。
-    Args:
-        name: 总结名称。
-        milestone_goal: 里程碑目标。
-        core_results: 核心成果列表。
-        change_audit: 变更审计。
-        tech_debt: 遗留风险/技术债。
-        file_target: 指定阶段文件或 None。
-    Returns:
-        bool: 是否成功。
-    Side Effects:
-        更新阶段文件与心跳。
-    """
+) -> bool:
     filename, filepath = resolve_stage_file(file_target)
     if not filename or not filepath:
         print("[!] 当前没有可操作的阶段文件。")
@@ -1702,18 +1493,7 @@ def append_stage_summary(
     return True
 
 
-def archive_stage(force=False, dry_run=False, file_target: Optional[str] = None):
-    """
-    归档阶段文件并更新索引。
-    Args:
-        force: 是否强制归档。
-        dry_run: 是否仅预览。
-        file_target: 指定阶段文件或 None。
-    Returns:
-        bool: 是否成功。
-    Side Effects:
-        分流任务、写入归档、更新索引/会话并删除原文件。
-    """
+def archive_stage(force: bool = False, dry_run: bool = False, file_target: Optional[str] = None) -> bool:
     filename, src = resolve_stage_file(file_target)
     if not filename or not src:
         print("[!] 当前没有可操作的阶段文件。")
@@ -1723,9 +1503,7 @@ def archive_stage(force=False, dry_run=False, file_target: Optional[str] = None)
         print("[!] 该阶段已经位于 archive 目录。")
         return False
 
-    progress = calculate_progress(src)
     errors, warns = validate_stage_document(src)
-
     if errors and not force:
         print("[!] 归档前校验失败：")
         for e in errors:
@@ -1733,6 +1511,14 @@ def archive_stage(force=False, dry_run=False, file_target: Optional[str] = None)
         for w in warns:
             print(f"  [WARN]  {w}")
         print("[?] 请先修复上述 ERROR。需要强制继续时使用: done --force")
+        return False
+
+    p0_ok, pending_p0 = check_p0_completed(src)
+    if not p0_ok and not force:
+        print("\n[!] 归档拒绝：仍存在未完成的 [P0] 任务。")
+        for item in pending_p0:
+            print(f"  {item}")
+        print("\n[?] 请先完成上述 P0 任务。需要强制继续时使用: done --force")
         return False
 
     dod_ok, pending_dod = check_dod_completed(src)
@@ -1743,39 +1529,44 @@ def archive_stage(force=False, dry_run=False, file_target: Optional[str] = None)
         print("\n[?] 请先完成上述验收项。需要强制继续时使用: done --force")
         return False
 
-    if progress < 100 and not force:
-        print(f"\n[!] 进度 {progress}% 未达标。强制归档请使用: done --force")
+    summary_ok = has_summary_content(src)
+    if not summary_ok and not force:
+        print("\n[!] 归档拒绝：## 9. 阶段总结 仍为空。")
+        print("[?] 请先补充阶段总结。需要强制继续时使用: done --force")
+        return False
+
+    impl_ok, impl_paths = check_implementation_evidence(src)
+    if not impl_ok and not force:
+        print("\n[!] 归档拒绝：实施型阶段尚未发现实际代码/测试/配置 evidence。")
+        print("[?] 请先补充可验证 evidence。需要强制继续时使用: done --force")
         return False
 
     if dry_run:
-        print(f"[DRY-RUN] 将归档阶段: {filename} (进度: {progress}%)")
+        print(f"[DRY-RUN] 将归档阶段: {filename}")
         for w in warns:
             print(f"[DRY-RUN][WARN] {w}")
         return True
 
     content = read_text(src)
 
-    oos_match = re.search(r"^## 3\..*?(?=^## \d+\.|\Z)", content, re.M | re.S)
+    # 非范围迁移
+    oos_match = find_section_block(content, 3)
     if oos_match:
-        oos_tasks = re.findall(r"^\s*-\s+\S.*$", oos_match.group(0), re.M)
+        _s, _e, _h, body = oos_match
+        oos_tasks = re.findall(r"^\s*-\s+\[OUT-SCOPE-\d+\].*$", body, re.M)
         if oos_tasks:
             route_backlog(oos_tasks, filename, "[ROADMAP]")
 
-    breakdown_match = re.search(r"^## 4\..*?(?=^## \d+\.|\Z)", content, re.M | re.S)
+    # 未完成任务迁移
+    breakdown_match = find_section_block(content, 4)
     if breakdown_match:
-        unfinished = re.findall(r"^\s*-\s*\[ \].*$", breakdown_match.group(0), re.M)
+        _s, _e, _h, body = breakdown_match
+        unfinished = re.findall(r"^\s*-\s*\[ \].*$", body, re.M)
         if unfinished:
             route_backlog(unfinished, filename, "[TECH_DEBT]")
 
     summary = extract_summary_brief(content)
-
-    fm, _ = parse_frontmatter(content)
-    current_status = fm.get("status")
-    if current_status == "ARCHIVED":
-        print("[!] 当前阶段已经是 ARCHIVED。")
-        return False
-
-    final_status = "ARCHIVED" if force and progress < 100 else "COMPLETED"
+    final_status = "ARCHIVED" if force else "COMPLETED"
     content = replace_frontmatter(
         content,
         {
@@ -1784,48 +1575,31 @@ def archive_stage(force=False, dry_run=False, file_target: Optional[str] = None)
         },
     )
 
-    summary_section = find_section_block(content, 9)
-    if summary_section:
-        _s, _e, _h, body = summary_section
-        if re.fullmatch(r"\s*-\s*暂无\s*", body.strip()):
-            summary_entry = render_summary_entry(
-                filepath=src,
-                name="Archive Summary",
-                milestone_goal="阶段归档。",
-                core_results=["阶段已完成归档流程。"],
-                change_audit="归档时自动补写状态与结束日期。",
-                tech_debt="已按规则分流至 Backlog。",
-            )
-            content = replace_section_body(content, 9, summary_entry)
+    if not summary_ok:
+        summary_entry = render_summary_entry(
+            filepath=src,
+            name="Archive Summary",
+            milestone_goal="阶段归档。",
+            core_results=["阶段已完成归档流程。"],
+            change_audit="归档时自动补写状态与结束日期。",
+            tech_debt="已按规则分流至 Backlog。",
+        )
+        content = replace_section_body(content, 9, summary_entry)
 
     write_text(src, content)
 
     dst = os.path.join(cfg.archive_exec_dir, filename)
     shutil.copy2(src, dst)
     os.remove(src)
-    # lines = read_text(cfg.stages_index).splitlines(True)
-    # new_lines = []
-    # for line in lines:
-    #     if filename in line and "（当前阶段）" in line:
-    #         line = line.replace(".stages/stages/", ".stages/archive/stages/")
-    #         line = line.replace("（当前阶段）", "（已归档）")
-    #         new_lines.append(line)
-    #         new_lines.append(f"   > {summary}\n")
-    #     else:
-    #         new_lines.append(line)
-    # write_text(cfg.stages_index, "".join(new_lines))
-    # 重建索引
+
     remaining_active = []
     if os.path.exists(cfg.stages_exec_dir):
-        remaining_active = [
-            f for f in os.listdir(cfg.stages_exec_dir)
-            if f.endswith(".md")
-        ]
+        remaining_active = [f for f in os.listdir(cfg.stages_exec_dir) if f.endswith(".md")]
     remaining_active = sorted(remaining_active, key=_extract_stage_num)
     next_current = remaining_active[0] if remaining_active else None
+
     rewrite_stages_index(current_stage=next_current)
     update_session_summary(f"[归档自动化] 阶段 {filename} 已结项: {summary}")
-    # os.remove(src)
     print("[OK] 归档完成。")
     return True
 
@@ -1835,11 +1609,6 @@ def archive_stage(force=False, dry_run=False, file_target: Optional[str] = None)
 # -------------------------------------------------------------------
 
 def main():
-    """
-    CLI 入口，解析参数并分发子命令。
-    Side Effects:
-        可能创建/修改 .stages 资产并输出日志。
-    """
     base_parser = argparse.ArgumentParser(add_help=False)
     base_parser.add_argument("--root", help="指定项目根目录")
     temp_args, _ = base_parser.parse_known_args()
@@ -1900,7 +1669,7 @@ def main():
     validate_p.add_argument("--file", help="指定 stage 文件")
 
     done_p = subparsers.add_parser("done", help="闭环归档阶段 (触发任务分流与 DoD 检查)")
-    done_p.add_argument("--force", action="store_true", help="忽略未完成任务，强制执行归档操作")
+    done_p.add_argument("--force", action="store_true", help="忽略门禁，强制执行归档操作")
     done_p.add_argument("--dry-run", action="store_true", help="预览归档操作，不执行实际变更")
     done_p.add_argument("--file", help="指定 stage 文件")
 
@@ -1914,7 +1683,7 @@ def main():
         slug = slugify_name(args.name)
         existing = check_stage_name_exists(slug)
         if existing:
-            print(f"[!] 警告: 已存在包含 '{slug}' 的阶段: {existing}")
+            print(f"[!] 警告: 已存在同名阶段: {existing}")
             print("[?] 若确认创建，请使用不同名称。")
             sys.exit(1)
 
@@ -1929,9 +1698,7 @@ def main():
         content = initialize_stage_content(template, next_num, args.name)
         write_text(filepath, content)
 
-        # 新建阶段后，重建索引，并将新阶段设为唯一当前阶段
         rewrite_stages_index(current_stage=filename)
-
         update_heartbeat()
         print(f"[*] 初始化阶段: {filename}")
 

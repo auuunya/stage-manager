@@ -1,81 +1,26 @@
 ---
 priority: critical
 enforcement: mandatory
-note: 本文件定义当前会话的强制执行标准。优先级高于 SKILL.md。
+note: 本文件定义当前会话的强制执行补丁。优先级高于 SKILL.md。
 ---
 
 > Language: 中文
 
-## 1. 语言与质量协议
+## 1. 语言与输出约束
 
-- 全场景输出强制使用中文。
+- 全场景输出强制使用[Language]。
 - 严禁 Emoji。
-- 输出中的状态与标记优先使用 ASCII 风格符号，如 `[OK]`, `[!]`, `[-]`, `[x]`, `[ ]`。
-- 凡是涉及架构决策的代码提交，Commit Message 必须包含对应的 `[ADRS-XXX]` 唯一编号。
+- 状态与标记优先使用 ASCII 风格符号，如 `[OK]`, `[!]`, `[-]`, `[x]`, `[ ]`。
 
-## 2. 规范校验义务 (Compliance)
-
-- 在执行 `init`、`sync`、`summary --stage` 或人工补全文档前，必须先读取 `references/best_practice.md`。
-- 所有新阶段文档必须先基于 `references/stage_template.md` 初始化；若使用脚本初始化，则以脚本生成结果作为最终起点。
-- 所有阶段文档输出必须与 `references/stage_example.md` 的字段写法、结构粒度和条目组织方式保持一致。
-- Agent 严禁在最终文档中保留模板占位引用块、说明性噪音或无意义示例文本。
-- 未知信息必须保留为 `TBD`、`null` 或空数组，不得臆造。
-
-## 3. 工程化补丁 (Engineering Patches)
-
-- 执行 `stage:done` 前，必须核对 `## 5. 验收标准`。若存在未勾选项，严禁直接归档。
-- 当进度未达到 100% 或 DoD 未通过时，必须先列出 `[Pending Tasks]` 并请求用户授权；严禁擅自使用 `--force`。
-- `sync [ADR]` 仅用于生成 ADR 索引与存根；生成后，Agent 必须继续补全：
-  - 背景/动机
-  - 可选方案
-  - 结论
-  - 影响/后果
-- 日志必须指向具体模块、接口、脚本、风险项或 `[ADRS-XXX]`，严禁使用"优化了代码""做了一些调整"等模糊表述。
-- 当 section 当前为 `- 暂无` 且需要新增首条记录时，必须替换该占位，不得保留并列脏数据。
-- 若任务包含代码实现，执行 `stage:done` 前必须先核对实际变更证据，例如源码 diff、变更文件列表、测试结果、构建结果或可验证产物；仅有规划清单、阶段总结或 ADR 不得视为完成依据。
-
-## 4. 工作流约束
+## 2. 强制流程补丁
 
 - 当 Agent 开始执行项目阶段管理工作时，首个操作必须是 `stage:bootstrap`。
-- `init` 完成后，必须根据当前需求继续填充：
-  - `## 1. 阶段目标`
-  - `## 2. 范围`
-  - `## 4. 任务拆解`
-  - `## 5. 验收标准`
-  - `## 6. 风险与应对`
-- 若用户需求不足以完整填充，未知字段必须保留 `TBD/null`，不得编造。
+- 在执行 `init`、`sync`、`summary`、人工补全文档前，必须先读取 [references/best_practice.md](references/best_practice.md)。
+- 所有新阶段文档必须基于 [references/stage_template.md](references/stage_template.md) 初始化。
+- 所有阶段文档输出必须与 [references/stage_example.md](references/stage_example.md) 的字段写法、结构粒度和条目组织方式保持一致。
 - 更新已有阶段文档时，只允许增量修改受影响的 section，不得整体重写未变更内容。
-- 当需要操作非当前活跃阶段时，优先使用脚本的 `--file` 参数，而不是手动猜测目标文件。
-- 允许一次生成多个未归档阶段文件，但任意时刻只允许一个 `（当前阶段）`。其余未归档阶段必须标记为 `（活跃阶段）`。
-- 不显式传 `--file` 时，`sync`、`summary --stage`、`validate`、`done`、`intake`、`status` 均默认作用于 `（当前阶段）`。
-- 若一次规划多个阶段并同时生成多个 `stage` 文件，默认应将执行顺序中的第一个阶段设为 `（当前阶段）`，其余阶段标记为 `（活跃阶段）`。
 
-## 5. 技能代码保护
-
-- 严禁擅自修改当前 Skill 目录下 `scripts/` 中的任何脚本代码。
-- Agent 必须定位为脚本的使用者/执行者，而非默认维护者。
-- 只有在用户明确下达"优化/修改 stage-manager 技能本身"之类指令时，方可修改脚本、模板或参考文档。
-
-## 6. 资产保护协议
-
-- 严禁使用直接覆写方式手动修改以下索引资产：
-  - `.stages/STAGES.md`
-  - `.stages/BACKLOGS.md`
-  - `.stages/ADRS.md`
-  - `.stages/STAGE_SESSIONS.md`
-- 所有元数据更新必须且只能通过调用 `python3 <skill-path>/scripts/stage_manager.py` 的对应子命令完成，例如：
-- `sync`
-- `summary`
-- `intake`
-- `done`
-
-校验动作使用：
-
-- `validate`
-
-- 脚本负责处理追加、编号与索引更新逻辑；Agent 不得手动合并历史记录或重排已有索引。
-
-## 7. 阶段归档前置检查
+## 3. done 前强制检查
 
 执行 `stage:done` 前，Agent 必须显式确认以下条件：
 
@@ -84,3 +29,25 @@ note: 本文件定义当前会话的强制执行标准。优先级高于 SKILL.m
 3. [ ] `## 3. 非范围` 中的新想法已迁移到 `BACKLOGS.md` 或后续阶段。
 4. [ ] 已执行 `stage:summary` 保存最后会话快照，或已确认当前上下文无需额外快照。
 5. [ ] `## 9. 阶段总结` 已填写完成，或允许脚本补写最小归档总结。
+6. [ ] 若任务包含代码实现，已核对实际变更证据，例如源码 diff、变更文件列表、测试结果、构建结果或可验证产物。
+
+- 若未满足上述条件，必须先列出 `[Pending Tasks]` 并请求用户授权；严禁擅自使用 `--force`。
+
+## 4. ADR 与提交约束
+
+- `sync [ADR]` 仅用于生成 ADR 索引与存根；生成后，Agent 必须继续补全：
+  - 背景/动机
+  - 可选方案
+  - 结论
+  - 影响/后果
+- 凡是涉及架构决策的代码提交，Commit Message 必须包含对应的 `[ADRS-XXX]` 唯一编号。
+
+## 5. 资产保护补丁
+
+- 严禁擅自修改当前 Skill 目录下 `scripts/` 中的任何脚本代码。
+- 严禁使用直接覆写方式手动修改以下索引资产：
+  - `.stages/STAGES.md`
+  - `.stages/BACKLOGS.md`
+  - `.stages/ADRS.md`
+  - `.stages/STAGE_SESSIONS.md`
+- 所有索引资产更新必须通过 `python3 <skill-path>/scripts/stage_manager.py` 的对应子命令完成。

@@ -1,10 +1,11 @@
 # references/best_practice.md
 
-> 本文件用于指导任务拆解、验收与日志质量；若与 `SKILL.override.md` 的强制规则冲突，以 `SKILL.override.md` 为准。
+> 本文件用于指导任务拆解、验收、evidence 编写与日志质量；若与 `SKILL.override.md` 的强制规则冲突，以 `SKILL.override.md` 为准。
+> 阶段文档的字段结构与章节 schema 以 `references/stage_template.md` 为准；本文件仅补充最佳实践，不重新定义 schema。
 
 ## 1. 核心哲学：原子化与闭环
 
-阶段计划的核心目的不是“记录”，而是“驱动执行”。每一个阶段文档必须是一个**可交付的任务闭环**。
+阶段计划的核心目的不是“记录”，而是“驱动执行”。每一个阶段文档必须是一个可交付的任务闭环。
 
 - **隔离原则**：Stage N 的失败不应导致全局崩溃，必须在 Stage N 中定义容错或回滚方案。
 - **文档即代码**：像维护代码一样维护 `stage-XXX.md`，保持状态实时同步。
@@ -28,30 +29,55 @@
 
 - 若任务无法在 1～2 天内完成，应继续拆分。
 - 若任务不包含可验证结果，应重写任务描述。
-- 默认使用结构化格式：`[P0/P1/P2] [TASK-ID] 名称 | owner=... | executor=... | skills=[...] | task_depends_on=[...] | due=YYYY-MM-DD`
+- 默认使用结构化格式：
+  `[P0/P1/P2] [TASK-001] 名称 | owner=... | executor=... | skills=[...] | task_depends_on=[...] | acceptance=[AC-001] | deliverables=[] | evidence=[] | due=YYYY-MM-DD`
+- `acceptance` 应显式指向该任务支撑的验收项。
+- `deliverables` 应填写交付物标识；`evidence` 应填写完成证据，而不是用二者混用。
 
 ---
 
 ## 3. 验收标准 (Definition of Done) 编写指南
 
-不要写模糊的描述，使用“动作 + 结果”的组合。
+`## 5. 验收标准` 的字段结构以 `references/stage_template.md` 为准。
+本节用于指导 `required_checks`、`evidence` 及验收描述的可判定性。
 
-- **技术类**：代码已 Push，单测覆盖率 > 80%，通过编译检查。
-- **文档类**：README 已更新，接口 API 文档已同步，Swagger 可访问。
+不要写模糊描述，优先使用“动作 + 结果”的组合。
+
+- **技术类**：代码已 Push，通过编译检查，核心单测通过。
+- **文档类**：README 已更新，接口文档已同步，设计说明可审阅。
 - **部署类**：在测试环境成功运行，无 P0 级 Bug。
+- **性能类**：在明确负载下达到指标门槛，并保留测试结果。
+- **可追踪类**：日志、ADR、阶段总结已同步，关键变更可回溯。
 
 补充约束：
 
 - `## 5. 验收标准` 中的每一项都必须可明确勾选。
 - 不要使用“符合预期”“基本完成”“视情况而定”等不可判定表达。
+- `required_checks` 应尽量写成可验证的检查点，例如：
+  - `login_api_returns_token`
+  - `permission_check`
+  - `100_rps_no_error`
+  - `summary_updated`
+
+### evidence 编写建议
+
+- 代码类 evidence 可直接引用项目原始路径，如 `src/...`、`tests/...`、`configs/...`。
+- 非代码类 evidence 应统一放在 `.stage/` 下，推荐目录：
+  - `.stage/reports/`
+  - `.stage/docs/`
+  - `.stage/logs/`
+  - `.stage/snapshots/`
+- 每个 `[P0]` 任务建议至少提供一份可读摘要 evidence。
+- 每个 `AC-*` 建议至少包含一条可核验 evidence。
+- 若为实施型阶段，仅有任务清单、总结或 ADR 不足以构成完成证据。
 
 ---
 
 ## 4. 风险与应对 (Risk Matrix) 示例
 
-在填写 `## 6. 风险与应对` 时，应优先考虑 **技术风险、环境风险、时间风险** 三类。
+在填写 `## 6. 风险与应对` 时，应优先考虑技术风险、环境风险、时间风险三类。
 
-> **示例：**
+> 示例：
 >
 > - **风险**：第三方 API 并发限制。
 > - **触发条件**：测试用户超过 100 人时。
@@ -66,24 +92,37 @@
 
 ## 5. 进度日志与 Git 提交规范
 
-日志与代码提交应记录**关键决策**而非琐碎动作。
+日志与代码提交应记录关键决策，而非琐碎动作。
 
-- **✅ 日志写法**：
+- **日志写法**：
   - **状态**: 已完成
   - **关键进展**: 完成 `auth` 模块重构；采用 Session 方案，详见 [ADRS-002]。
   - **后续行动**: 补充权限校验测试。
-- **✅ Git 提交规范**：凡是涉及架构决策的代码修改，Commit Message 应包含对应的 ADRS ID。
-  - _示例_: `feat: 实现加密存储逻辑 [ADRS-005]`
-    > 此项为工程协作规范，当前脚本不会自动校验，但 Agent 在生成提交建议或总结时必须遵守。
+- **Git 提交规范**：凡是涉及架构决策的代码修改，Commit Message 应包含对应的 ADRS ID。
+  - 示例：`feat: 实现加密存储逻辑 [ADRS-005]`
+
+补充约束：
+
+- 日志必须指向具体模块、接口、脚本、风险项或 ADR。
+- 不要写“优化了代码”“做了一些调整”“处理了问题”等模糊表述。
 
 ---
 
 ## 6. 命名约定 (Naming Convention)
 
-- **文件命名**：`stage-<序号>-<英文短名>.md`（序号建议使用三位数字填充，如 001）
+- **文件命名**：`stage-<序号>-<英文短名>.md`（序号建议使用三位数字填充，如 `001`）
   - Good: `stage-003-stripe-integration.md`
   - Bad: `Stage3_FixBug.md`
 - **标题命名**：文档标题应与 frontmatter 对齐，使用 `# STAGE-<序号>: <name>`
+- **编号命名**：建议统一使用三位数字风格：
+  - `TARGET-001`
+  - `SCOPE-001`
+  - `OUT-SCOPE-001`
+  - `TASK-001`
+  - `AC-001`
+  - `LOG-001`
+  - `ADRS-001`
+  - `SUMMARY-001`
 
 ---
 
@@ -91,11 +130,14 @@
 
 在执行归档或将阶段状态更新为 `COMPLETED` / `ARCHIVED` 前，请确保：
 
-1. [ ] 所有 **[P0]** 任务已勾选。
+1. [ ] 所有 `[P0]` 任务已勾选。
 2. [ ] `## 5. 验收标准` (DoD) 100% 通过。
 3. [ ] `## 3. 非范围` 中产生的新想法已移至 `BACKLOGS.md` 或记录在下一个 Stage。
 4. [ ] 已执行 `stage_manager.py summary` 保存最后记忆快照。
 5. [ ] `## 9. 阶段总结` 已补充完成；若为空，允许由脚本生成最小归档总结。
+6. [ ] 若为实施型阶段，已核对可验证的实际变更证据，例如源码 diff、测试结果、构建结果、运行结果或产物文件。
+
+---
 
 ## 8. 阶段类型规范
 
@@ -112,9 +154,12 @@
    - 不得仅以清单、建议、总结或 ADR 视为完成。
 
 4. **默认判定规则**
-   - 出现 `implement / refactor / fix / integrate / migrate / replace` 或「实现 / 改造 / 重构 / 修复 / 接入 / 替换 / 迁移」语义时，默认按 **实施型阶段**。
-   - 出现 `blueprint / design / audit / review / planning / analysis` 或「蓝图 / 方案 / 审计 / 评审 / 规划 / 分析」语义时，默认按 **规划型阶段**。
+   - 出现 `implement / refactor / fix / integrate / migrate / replace` 或“实现 / 改造 / 重构 / 修复 / 接入 / 替换 / 迁移”语义时，默认按实施型阶段。
+   - 出现 `blueprint / design / audit / review / planning / analysis` 或“蓝图 / 方案 / 审计 / 评审 / 规划 / 分析”语义时，默认按规划型阶段。
 
 5. **完成标准**
    - 规划型阶段：文档与设计交付完整。
    - 实施型阶段：存在可验证的代码或系统变更。
+
+6. **补充说明**
+   - 阶段类型只影响完成标准与 evidence 要求，不改变 `references/stage_template.md` 定义的文档 schema。
