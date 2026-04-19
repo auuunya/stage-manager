@@ -1,117 +1,123 @@
 ---
 name: stage-manager
-description: 项目阶段规划、任务拆解、进度同步与归档 skill。适用于新建阶段、维护活跃阶段、记录 ADR、认领 backlog、保存会话摘要、填写阶段总结和执行归档门禁。典型触发词：阶段规划、任务拆解、阶段同步、记录 ADR、认领 backlog、归档阶段、stage:init、stage:done。
+description: 阶段规划、任务拆解、进度同步、ADR 记录、backlog 认领、会话摘要与归档门禁 skill。
 ---
 
-> [MANDATORY] 若存在 `SKILL.override.md`，Agent 必须先读取该文件；其约束优先级高于本文件。
+> [MANDATORY] 若存在 `SKILL.override.md`，必须先读取；其约束优先级高于本文件。
+>
+> [MANDATORY] 所有会写入 `.stages/` 或阶段文档的操作必须串行执行。禁止并发运行 `stage:init`、`stage:sync`、`stage:summary`、`stage:intake`、`stage:check`、`stage:switch`、`stage:done`；`sub_agent` 默认只读。
 
-## 1. 核心交互指令
+## 0. 硬规则
 
-> `stage:*` 仅为技能内语义别名；实际执行时映射为：
-> `python3 <skill-path>/scripts/stage_manager.py <subcommand>`
+- `stage:*` 的实际入口是：
 
-| 指令                  | CLI 子命令      | 用途                                              |
-| :-------------------- | :-------------- | :------------------------------------------------ |
-| `stage:bootstrap`     | `bootstrap`     | [LOAD] 加载会话快照、最近决策、活跃阶段与 Backlog |
-| `stage:init <name>`   | `init <name>`   | 初始化新阶段文档并写入资产索引                    |
-| `stage:sync "<msg>"`  | `sync "<msg>"`  | 增量日志；`[ADR]` 前缀触发 ADR 索引与存根         |
-| `stage:summary "<t>"` | `summary "<t>"` | [SAVE] 压缩并保存当前会话快照                     |
-| `stage:summary --stage ...` | `summary --stage ...` | 写入 `## 9. 阶段总结`，用于归档前补全总结 |
-| `stage:intake "<k>"`  | `intake "<k>"`  | 从 Backlog 认领任务并注入阶段                     |
-| `stage:status`        | `status`        | 查看项目健康度、进度、最近决策与会话摘要          |
-| `stage:validate`      | `validate`      | 校验阶段文档结构                                  |
-| `stage:check <ID>`    | `check <ID>`    | 勾选任务/验收项（`--uncheck` 反向）               |
-| `stage:switch <file>` | `switch <file>` | 切换当前活跃阶段                                  |
-| `stage:done`          | `done`          | 闭环归档（含 DoD 硬门禁，严禁擅自 `--force`）     |
-
-- 操作非活跃阶段时使用 `--file <stage-file>`。`bootstrap` 无 `--file` 语义。
-- 所有元数据、日志、ADR、快照与任务认领均通过脚本完成，不得手动修改索引。
-- 同一项目的 `.stages/` 资产只允许**单 Agent 串行写入**；若存在 `sub_agent`，默认只读，不得并发执行多个 `stage:*` 写操作。
-- 严禁擅自修改 `scripts/` 下的代码，除非用户明确要求。
-- 严禁直接覆写 `.stages/STAGES.md`、`BACKLOGS.md`、`ADRS.md`、`STAGE_SESSIONS.md`。
-
-## 2. 阶段文档 schema
-
-阶段文档遵循: [references/stage_template.md](references/stage_template.md)
-仅作参考示例，非强制对齐: [references/stage_example.md](references/stage_example.md)
-
-**任务行格式：**
-
-```
-- [ ] [P0] [TASK-001] 名称 | owner=unassigned | executor=agent | skills=[] | task_depends_on=[] | acceptance=[AC-001] | deliverables=[] | evidence=[] | due=YYYY-MM-DD
+```text
+python3 <skill-path>/scripts/stage.py <subcommand>
 ```
 
-- `executor` 仅允许 `agent` / `human` / `sub_agent`
-- `due` 未知时填 `YYYY-MM-DD` 或 `null`，不得臆造
+- 当前稳定 CLI 入口是 `scripts/stage.py`；`scripts/core/*.py` 是内部实现，除非用户明确要求改脚本实现，否则不要进入 `core/`。
+- `.stages/` 是系统运行资产目录，`.stage/` 是交付证据目录；不要混用。
+- 不要手动改 `.stages/STAGES.md`、`ADRS.md`、`BACKLOGS.md`、`STAGE_SESSIONS.md`。
+- 未知信息写 `TBD` / `null` / `[]`，不要臆造。
+- 操作其他阶段时使用 `--file <stage-file>`；`bootstrap` 无 `--file` 语义。
 
-**验收项格式：**
+## 1. 三条最短路径
 
-```
-- [ ] [AC-001] 功能性 | verify_by=task_completion | required_tasks=[TASK-001] | required_checks=[critical_path_test] | evidence=[]
-```
+| 场景 | 动作序列 |
+| :--- | :--- |
+| 新项目，无当前阶段 | `stage:bootstrap` -> 读 `references/best_practice.md` -> `stage:init <name>` -> 补全 `## 1-6` -> `stage:validate` |
+| 继续推进当前阶段 | `stage:bootstrap` -> `stage:status` -> `stage:sync` / `stage:check` / `stage:intake` |
+| 准备归档 | `stage:validate` -> `stage:summary --stage ...` -> 核对 DoD -> `stage:done` |
 
-- `verify_by` 仅允许：`task_completion` / `evidence_review` / `metric_threshold` / `artifact_presence`
+新建阶段时，“先 `bootstrap`，再读 `references/best_practice.md`，再 `init`”是硬顺序，不是建议。
+若回答里缺少“读取 `references/best_practice.md`”这一步，应视为流程不完整；不要把它折叠进“按模板补全文档”或“参考最佳实践”这类模糊表述。
 
-**evidence 约定**（详见 `references/best_practice.md`）：代码类保持原始路径；非代码类统一放 `.stage/`（`reports/`、`docs/`、`logs/`、`snapshots/`）。
+## 2. 命令映射
 
-## 3. 工程化机制
-
-### 3.1 DoD 硬门禁
-
-执行 `stage:done` 前，Agent 必须显式确认：
-
-1. [ ] 所有 `[P0]` 任务已完成
-2. [ ] `## 5. 验收标准` 已全部勾选
-3. [ ] `## 3. 非范围` 新想法已迁移至 Backlog 或后续阶段
-4. [ ] 已执行 `stage:summary` 或确认无需额外快照
-5. [ ] `## 9. 阶段总结` 已填写，或允许脚本补写最小归档总结
-6. [ ] 实施型阶段已核对变更证据（源码 diff、测试结果、构建产物等）
-
-未满足时列出 `[Pending Tasks]` 并请求用户授权；严禁擅自 `--force`。
-
-### 3.2 Backlog 认领
-
-- 从 `BACKLOGS.md` 按关键字认领，注入 `## 4. 任务拆解`，归一为结构化格式。
-
-### 3.3 ADR 同步
-
-- `stage:sync "[ADR] <title>"` 自动生成 ADRS 编号、更新索引、写入存根。
-- 生成 ADR 存根后，Agent 只允许**增量编辑当前阶段文档的 `## 8. 关键决策（ADRs）` section**，补全：背景/动机、可选方案、结论、影响/后果；不得手动改 `.stages/ADRS.md` 索引。
-- 若当前信息不足以补全 ADR 四字段，先保留存根并向用户索取缺失决策信息；不得臆造。
-- 涉及架构决策的 Commit Message 必须包含 `[ADRS-XXX]` 编号。
-
-### 3.4 文档结构约束
-
-- 所有 `@section:*` 锚点、章节编号和顺序必须保留。
-- 更新时只增量修改受影响 section，不得整体重写。
-- `- 暂无` 占位在新增首条时必须替换，不得并列保留。
-
-## 4. 标准生命周期
-
-### 4.1 决策表
-
-| 场景 | 首选动作 | 后续动作 |
+| 语义指令 | CLI 子命令 | 用途 |
 | :--- | :--- | :--- |
-| 项目刚开始、尚无活跃阶段 | `stage:bootstrap` | `stage:init <name>`，再补全目标/范围/任务/验收 |
-| 已有活跃阶段，要继续推进 | `stage:bootstrap` | `stage:status` 查看健康度，再 `stage:sync` / `stage:check` / `stage:intake` |
-| 有架构决策要记录 | `stage:sync "[ADR] <title>"` | 仅增量补全 `## 8. 关键决策（ADRs）` 的四个字段 |
-| 需要保存上下文，避免会话丢失 | `stage:summary "<text>"` | 继续执行阶段工作 |
-| 准备归档阶段 | `stage:validate` | `stage:summary --stage --name ... --goal ... --result ... --audit ... --debt ...`，确认 DoD 后再 `stage:done` |
+| `stage:bootstrap` | `bootstrap` | 加载会话快照、最近决策、当前阶段与 backlog |
+| `stage:init <name>` | `init <name>` | 初始化新阶段并写入索引 |
+| `stage:sync "<msg>"` | `sync "<msg>"` | 增量日志；`[ADR]` 前缀触发 ADR 存根与索引 |
+| `stage:summary "<text>"` | `summary "<text>"` | 保存会话快照 |
+| `stage:summary --stage ...` | `summary --stage ...` | 写入 `## 9. 阶段总结` |
+| `stage:intake "<keyword>"` | `intake "<keyword>"` | 从 backlog 认领任务 |
+| `stage:status` | `status` | 查看健康度、进度、最近决策与会话摘要 |
+| `stage:validate` | `validate` | 校验阶段文档 |
+| `stage:check <ID>` | `check <ID>` | 勾选或反勾选任务/验收项 |
+| `stage:switch <file>` | `switch <file>` | 切换当前阶段指针 |
+| `stage:done` | `done` | 闭环归档；严禁擅自 `--force` |
 
-1. **探测** — 首个操作必须是 `stage:bootstrap`；随后读取 `references/best_practice.md`。
-2. **认领** — 存在遗留或 Backlog 命中项时执行 `stage:intake`。
-3. **初始化** — 新建阶段执行 `stage:init`；补全目标、范围、任务、验收与风险。
-4. **执行** — 任务拆解遵循 INVEST 原则，使用结构化格式。
-5. **同步** — 变更后 `stage:sync`；架构决策用 `[ADR]` 前缀。
-6. **校验** — 交付或归档前 `stage:validate`。
-7. **闭环** — 验收通过后 `stage:done`。
+## 3. 文档与流程规则
 
-## 5. 输出原则
+- 规范模板：`references/stage_template.md`
+- 最佳实践：`references/best_practice.md`
 
-- 未知信息用 `TBD` / `null` / `[]`，不得臆造。
-- 日志必须指向具体模块、接口、风险项或 ADR，禁止模糊表述。
+### 3.1 文档结构
+
+- 保留所有 `@section:*` 锚点、章节编号和顺序。
+- 只增量修改受影响 section，不要整体重写。
+- 新增首条内容时，替换 `- 暂无` 占位，不要并列保留。
+
+### 3.2 Schema 关键约束
+
+- 任务行与验收项格式以 `references/stage_template.md` 为唯一准绳。
+- `executor` 仅允许：`agent` / `human` / `sub_agent`
+- `verify_by` 仅允许：`task_completion` / `evidence_review` / `metric_threshold` / `artifact_presence`
+- `due` 未知时填 `YYYY-MM-DD` 或 `null`
+
+### 3.3 Evidence
+
+- 代码和测试 evidence 保持原始路径。
+- 报告、文档、日志、快照等非代码 evidence 统一放 `.stage/`。
+- `evidence` 必须优先引用已存在或已确认会产出的对象；拿不准就写 `TBD`。
+- 实施型阶段必须产出实际代码、配置或测试变更；只有日志、总结、ADR 不算完成。
+
+### 3.4 ADR
+
+- 用 `stage:sync "[ADR] <title>"` 创建 ADR 存根与索引。
+- 只允许增量补全目标阶段文档 `## 8. 关键决策（ADRs）` 的四字段：背景/动机、可选方案、结论、影响/后果。
+- 不要手动改 `.stages/ADRS.md`。
+- 信息不足时保留 `TBD` 并向用户索取，不要臆造。
+
+### 3.5 Done 门禁
+
+执行 `stage:done` 前，必须确认：
+
+1. 所有 `[P0]` 任务已完成
+2. `## 5. 验收标准` 已全部勾选
+3. `## 3. 非范围` 的新想法已迁移到 backlog 或后续阶段
+4. 会话快照与阶段总结已补齐，或用户明确允许最小归档总结
+5. 实施型阶段已具备真实 evidence
+
+不满足时，原样展示缺失项；未经用户授权，不得使用 `--force`。
+
+## 4. 输出要求
+
+- 日志必须指向具体模块、接口、文件、风险或 ADR，避免“已优化”“已处理”。
 - 会话快照与阶段总结不是同一动作：
-  - 会话快照使用 `stage:summary "<text>"`。
-  - 阶段总结使用 `stage:summary --stage --name "<name>" --goal "<goal>" --result "<result-1>" --audit "<audit>" --debt "<debt>"`；`--result` 可重复。
-- **规划型阶段**（design/audit/review/planning/analysis）：文档与方案可为主要交付物。
-- **实施型阶段**（implement/refactor/fix/integrate/migrate/replace）：必须产生实际代码/配置/测试变更。
+  - 会话快照：`stage:summary "<text>"`
+  - 阶段总结：`stage:summary --stage --name ... --goal ... --result ... --audit ... --debt ...`
+- 规划型阶段可主要产出文档、方案、审计结果。
+- 实施型阶段必须落到代码、配置、测试或构建产物。
+
+### 模块级进展日志最小模板
+
+```text
+<模块/接口/文件> | change=<本次变更或当前状态> | evidence=<测试/文档/路径/ADR，未知写 TBD> | next=<下一个明确动作> | risk=<无 / 具体风险>
+```
+
+- 一条日志只描述一个模块主题；跨模块请拆开。
+- `next` 必须是紧邻的可执行动作。
+- `risk` 没有就写 `无`。
+
+## 5. 评估与恢复
+
+- dry-run 评估至少覆盖：新建阶段、推进当前阶段并记录 ADR、归档门禁、单写者约束。
+
+常见恢复动作：
+
+- `bootstrap` 后无当前阶段：`stage:init <name>`
+- 需要操作其他阶段：在写命令后追加 `--file <stage-file>`
+- `validate` 只有 WARN：继续推进，但在 `done` 前补齐
+- `done` 被拒绝：先修文档或 evidence，再重试；未经授权不得 `--force`

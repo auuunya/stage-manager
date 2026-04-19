@@ -1,13 +1,7 @@
 ---
-priority: critical
-enforcement: mandatory
-note: 会话级覆盖补丁。优先级高于 SKILL.md。
+name: stage-manager-override
+description: stage-manager 当前仓库覆盖约束
 ---
 
-> Language: 中文
-
-## 1. 输出约束
-
-- 全场景输出强制使用 [Language]。
-- 严禁 Emoji。
-- 状态标记使用 ASCII 符号：`[OK]` `[!]` `[-]` `[x]` `[ ]`。
+- 稳定 CLI 入口是 `scripts/stage.py`。
+- `scripts/core/*.py` 是内部实现；除非用户明确要求改脚本实现，否则优先聚焦 `.stages/`、阶段文档和交付物。

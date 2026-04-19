@@ -12,6 +12,13 @@ milestone: null
 
 ---
 
+<!--
+约定：
+- `.stages/` 由脚本维护
+- `.stage/` 用于 evidence
+- stage 写命令同一时刻只允许一个 Agent 执行
+-->
+
 <!-- @section:goals -->
 
 ## 1. 阶段目标
@@ -35,15 +42,9 @@ milestone: null
 
 ## 4. 任务拆解
 
-<!--
-任务字段约定：
-- executor 仅允许：agent / human / sub_agent
-- acceptance 填写该任务支撑的 AC 编号
-- deliverables 填写交付物标识，可为逻辑名称
-- evidence 填写任务完成证据
-- 代码类 evidence 可保持项目原始路径
-- 非代码类 evidence 统一放在 .stage/ 下
--->
+<!-- `executor`: agent / human / sub_agent -->
+<!-- 代码类 evidence 保持原始路径；非代码类放 `.stage/` -->
+<!-- 下列 `skills`、`deliverables`、`evidence`、`due` 只是 schema 占位示例；除非用户或项目上下文已明确给出，否则回答时不要把这些默认值当成真实事实直接写入。 -->
 
 - [ ] [P0] [TASK-001] 任务名称 | owner=unassigned | executor=agent | skills=[] | task_depends_on=[] | acceptance=[AC-001] | deliverables=[] | evidence=[] | due=YYYY-MM-DD
 - [ ] [P0] [TASK-900] 阶段验收 | owner=unassigned | executor=agent | skills=[stage-reviewer] | task_depends_on=[] | acceptance=[AC-001,AC-002,AC-003,AC-004] | deliverables=[stage-review-report] | evidence=[.stage/reports/stage-review.md] | due=YYYY-MM-DD
@@ -52,13 +53,7 @@ milestone: null
 
 ## 5. 验收标准
 
-<!--
-verify_by 仅允许：
-- task_completion
-- evidence_review
-- metric_threshold
-- artifact_presence
--->
+<!-- `verify_by`: task_completion / evidence_review / metric_threshold / artifact_presence -->
 
 - [ ] [AC-001] 功能性 | verify_by=task_completion | required_tasks=[TASK-001] | required_checks=[critical_path_test] | evidence=[]
 - [ ] [AC-002] 安全性 | verify_by=evidence_review | required_tasks=[TASK-001] | required_checks=[permission_check,isolation_check] | evidence=[]
@@ -76,7 +71,13 @@ verify_by 仅允许：
 
 ## 7. 进度日志
 
-> 进度日志记录时间序列增量，不重复抄写任务列表。
+<!--
+- ### [LOG-XXX] | [YYYY-MM-DD] | [主题] | [owner] | [Ver:git@commit-or-TBD]
+  - **状态**: 进行中 / 已完成 / 阻塞 (Blocked by: XXX)
+  - **关键进展**: 1 句增量描述
+  - **模块级记录**: <模块/接口/文件> | change=<...> | evidence=<...> | next=<...> | risk=<...>
+  - **后续行动**: 紧邻的下一步
+-->
 
 - 暂无
 
@@ -89,7 +90,5 @@ verify_by 仅允许：
 <!-- @section:summary -->
 
 ## 9. 阶段总结
-
-> 阶段总结只在阶段收尾或里程碑变化时更新。
 
 - 暂无

@@ -1,6 +1,6 @@
 # 项目待办清单 (Backlogs)
 
-> Backlog 中可使用轻量标签任务格式；任务被 `stage_manager.py intake` 认领后，应归一为阶段文档中的结构化任务格式。
+> Backlog 中可使用轻量标签任务格式；任务被 `stage.py intake` 认领后，应归一为阶段文档中的结构化任务格式。
 
 ## [TECH_DEBT] 技术债务
 
